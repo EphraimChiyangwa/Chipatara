@@ -1,45 +1,15 @@
 const express = require("express");
 const router = express.Router();
-const Appointment = require("../models/Appointment");
 const authMiddleware = require("../middleware/authMiddleware");
+const { bookAppointment, updateAppointmentStatus } = require("../controllers/appointmentController");
+const Appointment = require("../models/Appointment");
 
-
-// Book appointment
-router.post("/", authMiddleware, async (req, res) => {
-
-  try {
-
-    const { doctor, date, reason } = req.body;
-
-    const appointment = new Appointment({
-      patient: req.user.id,
-      doctor,
-      date,
-      reason
-    });
-
-    await appointment.save();
-
-    res.status(201).json({
-      message: "Appointment booked",
-      appointment
-    });
-
-  } catch (error) {
-
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
-
-  }
-
-});
-
+// Book appointment (patients only) - now checks doctor availability
+router.post("/", authMiddleware, bookAppointment);
 
 // Get appointments for logged-in patient
 router.get("/patient", authMiddleware, async (req, res) => {
-
   try {
-
     const appointments = await Appointment.find({
       patient: req.user.id
     });
@@ -47,20 +17,14 @@ router.get("/patient", authMiddleware, async (req, res) => {
     res.json(appointments);
 
   } catch (error) {
-
     console.error(error);
     res.status(500).json({ message: "Server error" });
-
   }
-
 });
-
 
 // Get appointments for doctor
 router.get("/doctor", authMiddleware, async (req, res) => {
-
   try {
-
     const appointments = await Appointment.find({
       doctor: req.user.id
     });
@@ -68,44 +32,12 @@ router.get("/doctor", authMiddleware, async (req, res) => {
     res.json(appointments);
 
   } catch (error) {
-
     console.error(error);
     res.status(500).json({ message: "Server error" });
-
   }
-
 });
 
-
-// Update appointment status
-router.put("/:id/status", authMiddleware, async (req, res) => {
-
-  try {
-
-    const { status } = req.body;
-
-    const appointment = await Appointment.findById(req.params.id);
-
-    if (!appointment) {
-      return res.status(404).json({ message: "Appointment not found" });
-    }
-
-    appointment.status = status;
-
-    await appointment.save();
-
-    res.json({
-      message: "Appointment status updated",
-      appointment
-    });
-
-  } catch (error) {
-
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
-
-  }
-
-});
+// Update appointment status (doctors only)
+router.put("/:id/status", authMiddleware, updateAppointmentStatus);
 
 module.exports = router;
