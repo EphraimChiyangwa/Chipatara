@@ -1,19 +1,18 @@
 const Appointment = require("../models/Appointment");
 const DoctorAvailability = require("../models/DoctorAvailability");
+const User = require("../models/User");
+const { sendEmail, emailTemplates } = require("../utils/emailService");
 
-// Helper: convert "HH:MM" to total minutes
 const toMinutes = (time) => {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
 };
 
-// Helper: get day name from a date string e.g. "Monday"
 const getDayName = (dateStr) => {
   const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   return days[new Date(dateStr).getDay()];
 };
 
-// Helper: extract "HH:MM" time from a date string
 const getTimeString = (dateStr) => {
   const date = new Date(dateStr);
   const hours = String(date.getHours()).padStart(2, "0");
@@ -21,7 +20,7 @@ const getTimeString = (dateStr) => {
   return `${hours}:${minutes}`;
 };
 
-// POST /api/appointments — Book an appointment (patients only)
+// POST /api/appointments
 exports.bookAppointment = async (req, res) => {
   try {
     if (req.user.role !== "patient") {
@@ -35,53 +34,34 @@ exports.bookAppointment = async (req, res) => {
     }
 
     const appointmentDate = new Date(date);
-
-    if (isNaN(appointmentDate)) {
-      return res.status(400).json({ message: "Invalid date format." });
-    }
-
-    if (appointmentDate < new Date()) {
-      return res.status(400).json({ message: "Cannot book an appointment in the past." });
-    }
+    if (isNaN(appointmentDate)) return res.status(400).json({ message: "Invalid date format." });
+    if (appointmentDate < new Date()) return res.status(400).json({ message: "Cannot book an appointment in the past." });
 
     const dayName = getDayName(date);
     const appointmentTime = getTimeString(date);
 
-    // Check doctor has availability on that day
-    const availabilitySlots = await DoctorAvailability.find({
-      doctor: doctorId,
-      day: dayName
-    });
-
+    const availabilitySlots = await DoctorAvailability.find({ doctor: doctorId, day: dayName });
     if (availabilitySlots.length === 0) {
-      return res.status(400).json({
-        message: `The doctor is not available on ${dayName}.`
-      });
+      return res.status(400).json({ message: `The doctor is not available on ${dayName}.` });
     }
 
-    // Check the appointment time falls within one of the doctor's slots
     const aptMinutes = toMinutes(appointmentTime);
-    const withinSlot = availabilitySlots.some((slot) =>
-      aptMinutes >= toMinutes(slot.startTime) && aptMinutes < toMinutes(slot.endTime)
+    const withinSlot = availabilitySlots.some(
+      (slot) => aptMinutes >= toMinutes(slot.startTime) && aptMinutes < toMinutes(slot.endTime)
     );
-
     if (!withinSlot) {
       return res.status(400).json({
         message: `The requested time (${appointmentTime}) is outside the doctor's available hours on ${dayName}.`
       });
     }
 
-    // Check no existing confirmed/pending appointment exists at the same time for this doctor
     const conflict = await Appointment.findOne({
       doctor: doctorId,
       date: appointmentDate,
       status: { $in: ["pending", "confirmed"] }
     });
-
     if (conflict) {
-      return res.status(409).json({
-        message: "This time slot is already booked. Please choose a different time."
-      });
+      return res.status(409).json({ message: "This time slot is already booked. Please choose a different time." });
     }
 
     const appointment = new Appointment({
@@ -94,10 +74,20 @@ exports.bookAppointment = async (req, res) => {
 
     await appointment.save();
 
-    res.status(201).json({
-      message: "Appointment booked successfully.",
-      appointment
-    });
+    // Send confirmation email to patient
+    const [patient, doctor] = await Promise.all([
+      User.findById(req.user.id),
+      User.findById(doctorId)
+    ]);
+
+    if (patient && doctor) {
+      const { subject, html } = emailTemplates.appointmentBooked(
+        patient.name, doctor.name, appointmentDate, reason
+      );
+      sendEmail({ to: patient.email, subject, html });
+    }
+
+    res.status(201).json({ message: "Appointment booked successfully.", appointment });
 
   } catch (error) {
     console.error(error);
@@ -105,7 +95,7 @@ exports.bookAppointment = async (req, res) => {
   }
 };
 
-// PATCH /api/appointments/:id/status — Doctor updates appointment status
+// PUT /api/appointments/:id/status
 exports.updateAppointmentStatus = async (req, res) => {
   try {
     if (req.user.role !== "doctor") {
@@ -113,30 +103,34 @@ exports.updateAppointmentStatus = async (req, res) => {
     }
 
     const { status } = req.body;
-
     const allowedStatuses = ["confirmed", "cancelled", "completed"];
-
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status value." });
     }
 
-    const appointment = await Appointment.findById(req.params.id);
+    const appointment = await Appointment.findById(req.params.id)
+      .populate("patient", "name email")
+      .populate("doctor", "name email");
 
-    if (!appointment) {
-      return res.status(404).json({ message: "Appointment not found." });
-    }
-
-    if (appointment.doctor.toString() !== req.user.id) {
+    if (!appointment) return res.status(404).json({ message: "Appointment not found." });
+    if (appointment.doctor._id.toString() !== req.user.id) {
       return res.status(403).json({ message: "Not authorized." });
     }
 
     appointment.status = status;
     await appointment.save();
 
-    res.json({
-      message: `Appointment ${status} successfully.`,
-      appointment
-    });
+    // Notify patient of status change
+    const { subject, html } = emailTemplates.appointmentStatusUpdate(
+      appointment.patient.name,
+      status,
+      appointment.doctor.name,
+      appointment.patient.name,
+      appointment.date
+    );
+    sendEmail({ to: appointment.patient.email, subject, html });
+
+    res.json({ message: `Appointment ${status} successfully.`, appointment });
 
   } catch (error) {
     res.status(500).json({ message: error.message });

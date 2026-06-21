@@ -2,38 +2,22 @@ const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
 const Doctor = require("../models/Doctor");
+const authMiddleware = require("../middleware/authMiddleware");
+const roleMiddleware = require("../middleware/roleMiddleware");
 
 
-// ✅ CREATE DOCTOR PROFILE
-router.post("/profile", async (req, res) => {
+// ✅ CREATE DOCTOR PROFILE (doctors only)
+router.post("/profile", authMiddleware, roleMiddleware("doctor"), async (req, res) => {
   try {
-    const { userId, specialization, hospital, consultationFee, bio } = req.body;
+    const { specialization, hospital, consultationFee, bio } = req.body;
 
-    // 1. Check if userId is provided
-    if (!userId) {
-      return res.status(400).json({ message: "User ID is required" });
-    }
-
-    // 2. Check if user exists
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // 3. Ensure user is a doctor
-    if (user.role !== "doctor") {
-      return res.status(400).json({ message: "User is not a doctor" });
-    }
-
-    // 4. Check if profile already exists
-    const existingProfile = await Doctor.findOne({ user: userId });
+    const existingProfile = await Doctor.findOne({ user: req.user.id });
     if (existingProfile) {
       return res.status(400).json({ message: "Doctor profile already exists" });
     }
 
-    // 5. Create profile
     const newDoctor = new Doctor({
-      user: userId,
+      user: req.user.id,
       specialization,
       hospital,
       consultationFee,
@@ -54,28 +38,66 @@ router.post("/profile", async (req, res) => {
 });
 
 
-// ✅ GET ALL DOCTORS
+// ✅ UPDATE DOCTOR PROFILE
+router.put("/profile", authMiddleware, roleMiddleware("doctor"), async (req, res) => {
+  try {
+    const { specialization, hospital, consultationFee, bio } = req.body;
+
+    const profile = await Doctor.findOneAndUpdate(
+      { user: req.user.id },
+      { specialization, hospital, consultationFee: Number(consultationFee), bio },
+      { new: true }
+    );
+
+    if (!profile) {
+      return res.status(404).json({ message: "Profile not found. Create it first." });
+    }
+
+    res.json({ message: "Profile updated successfully.", doctor: profile });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ✅ GET ALL DOCTORS (supports ?search=name&specialization=Cardiology)
 router.get("/", async (req, res) => {
   try {
-    const doctors = await User.find({ role: "doctor" })
-      .select("name email")
-      .lean();
+    const { search, specialization } = req.query;
 
-    const doctorsWithProfile = await Promise.all(
+    const userQuery = { role: "doctor" };
+    if (search) {
+      userQuery.name = { $regex: search, $options: "i" };
+    }
+
+    const doctors = await User.find(userQuery).select("name email").lean();
+
+    let doctorsWithProfile = await Promise.all(
       doctors.map(async (doc) => {
-        const profile = await Doctor.findOne({ user: doc._id });
-
-        return {
-          ...doc,
-          profile: profile || null,
-        };
+        const profile = await Doctor.findOne({ user: doc._id }).lean();
+        return { ...doc, profile: profile || null };
       })
     );
 
-    res.json(doctorsWithProfile);
+    if (specialization) {
+      doctorsWithProfile = doctorsWithProfile.filter(
+        (d) => d.profile?.specialization?.toLowerCase().includes(specialization.toLowerCase())
+      );
+    }
 
+    res.json(doctorsWithProfile);
   } catch (error) {
     console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ✅ GET UNIQUE SPECIALIZATIONS (for filter dropdown)
+router.get("/specializations", async (req, res) => {
+  try {
+    const profiles = await Doctor.find({}).select("specialization").lean();
+    const unique = [...new Set(profiles.map((p) => p.specialization).filter(Boolean))].sort();
+    res.json(unique);
+  } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });

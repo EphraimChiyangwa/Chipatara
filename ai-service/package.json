@@ -1,0 +1,17 @@
+{
+  "name": "chipatara-ai-service",
+  "version": "1.0.0",
+  "description": "AI symptom checker microservice for Chipatara telemedicine",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1"
+  }
+}
