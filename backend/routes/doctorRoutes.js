@@ -2,8 +2,9 @@ const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
 const Doctor = require("../models/Doctor");
-const authMiddleware = require("../middleware/authMiddleware");
-const roleMiddleware = require("../middleware/roleMiddleware");
+const authMiddleware  = require("../middleware/authMiddleware");
+const roleMiddleware  = require("../middleware/roleMiddleware");
+const Appointment     = require("../models/Appointment");
 
 
 // ✅ CREATE DOCTOR PROFILE (doctors only)
@@ -59,10 +60,20 @@ router.put("/profile", authMiddleware, roleMiddleware("doctor"), async (req, res
   }
 });
 
-// ✅ GET ALL DOCTORS (supports ?search=name&specialization=Cardiology)
+// ✅ GET OWN PROFILE (logged-in doctor — bypasses verified filter)
+router.get("/me", authMiddleware, roleMiddleware("doctor"), async (req, res) => {
+  try {
+    const profile = await Doctor.findOne({ user: req.user.id }).lean();
+    res.json(profile || null);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ✅ GET ALL DOCTORS (supports ?search=name&specialization=Cardiology — verified only)
 router.get("/", async (req, res) => {
   try {
-    const { search, specialization } = req.query;
+    const { search, specialization, minFee, maxFee, minRating } = req.query;
 
     const userQuery = { role: "doctor" };
     if (search) {
@@ -73,15 +84,37 @@ router.get("/", async (req, res) => {
 
     let doctorsWithProfile = await Promise.all(
       doctors.map(async (doc) => {
-        const profile = await Doctor.findOne({ user: doc._id }).lean();
+        const profile = await Doctor.findOne({ user: doc._id, verified: true }).lean();
         return { ...doc, profile: profile || null };
       })
     );
+
+    // Only return doctors that have a verified profile
+    doctorsWithProfile = doctorsWithProfile.filter((d) => d.profile !== null);
 
     if (specialization) {
       doctorsWithProfile = doctorsWithProfile.filter(
         (d) => d.profile?.specialization?.toLowerCase().includes(specialization.toLowerCase())
       );
+    }
+
+    if (minFee !== undefined) {
+      doctorsWithProfile = doctorsWithProfile.filter(d => (d.profile?.consultationFee ?? 0) >= Number(minFee));
+    }
+    if (maxFee !== undefined) {
+      doctorsWithProfile = doctorsWithProfile.filter(d => (d.profile?.consultationFee ?? 0) <= Number(maxFee));
+    }
+    // Attach average ratings from appointments
+    doctorsWithProfile = await Promise.all(
+      doctorsWithProfile.map(async (d) => {
+        const rated = await Appointment.find({ doctor: d._id, rating: { $gt: 0 } }).select('rating').lean()
+        const avg = rated.length ? (rated.reduce((s, a) => s + a.rating, 0) / rated.length) : 0
+        return { ...d, averageRating: Math.round(avg * 10) / 10, reviewCount: rated.length }
+      })
+    )
+
+    if (minRating !== undefined && Number(minRating) > 0) {
+      doctorsWithProfile = doctorsWithProfile.filter(d => (d.averageRating ?? 0) >= Number(minRating));
     }
 
     res.json(doctorsWithProfile);
@@ -91,10 +124,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ GET UNIQUE SPECIALIZATIONS (for filter dropdown)
+// ✅ GET UNIQUE SPECIALIZATIONS (verified doctors only)
 router.get("/specializations", async (req, res) => {
   try {
-    const profiles = await Doctor.find({}).select("specialization").lean();
+    const profiles = await Doctor.find({ verified: true }).select("specialization").lean();
     const unique = [...new Set(profiles.map((p) => p.specialization).filter(Boolean))].sort();
     res.json(unique);
   } catch (error) {

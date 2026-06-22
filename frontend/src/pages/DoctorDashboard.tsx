@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
-import { Clock, Trash2, CheckCircle, XCircle, ChevronRight, Star, FileText, MessageCircle } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { io, Socket } from 'socket.io-client'
+import { Clock, Trash2, CheckCircle, XCircle, ChevronRight, Star, FileText, MessageCircle, Video, Activity, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import {
   getDoctorAppointments, updateAppointmentStatus,
   addAvailability, deleteAvailability, getAvailability,
-  createDoctorProfile, updateDoctorProfile, getDoctors,
-  saveConsultationNotes, changePassword
+  createDoctorProfile, updateDoctorProfile, getMyDoctorProfile,
+  saveConsultationNotes, changePassword, getPatientHealthMetrics, getPatientMedicalProfile,
+  savePrescription, getAppointmentPrescription
 } from '../api'
 import BottomNav from '../components/BottomNav'
 import ChatScreen from '../components/ChatScreen'
@@ -34,12 +36,34 @@ export default function DoctorDashboard() {
   const [slotMsg, setSlotMsg] = useState('')
   const [apptMsg, setApptMsg] = useState('')
   const [hasProfile, setHasProfile] = useState(false)
+  const [profileVerified, setProfileVerified] = useState(false)
   const [profileForm, setProfileForm] = useState({ specialization: '', hospital: '', consultationFee: '', bio: '' })
   const [profileMsg, setProfileMsg] = useState('')
   const [editingProfile, setEditingProfile] = useState(false)
 
   // Chat
   const [chatAppt, setChatAppt] = useState<Appointment | null>(null)
+
+  // Patient health metrics panel
+  const [healthPatient, setHealthPatient] = useState<{ id: string; name: string } | null>(null)
+  const [patientMetrics, setPatientMetrics] = useState<any[]>([])
+  const [metricsLoading, setMetricsLoading] = useState(false)
+  const [healthLive, setHealthLive] = useState(false)
+  const healthSocketRef = useRef<Socket | null>(null)
+
+  // Patient medical profiles cache
+  const [medProfiles, setMedProfiles] = useState<Record<string, any>>({})
+  const [medOpen, setMedOpen] = useState<string | null>(null)
+
+  // Prescriptions
+  type MedRow = { name: string; dosage: string; frequency: string; duration: string; instructions: string }
+  const emptyMed = (): MedRow => ({ name: '', dosage: '', frequency: '', duration: '', instructions: '' })
+  const [rxFor, setRxFor] = useState<string | null>(null)
+  const [rxMeds, setRxMeds] = useState<MedRow[]>([emptyMed()])
+  const [rxNotes, setRxNotes] = useState('')
+  const [rxSaving, setRxSaving] = useState(false)
+  const [rxMsg, setRxMsg] = useState('')
+  const [rxCache, setRxCache] = useState<Record<string, any>>({})
 
   // Consultation notes
   const [notesFor, setNotesFor] = useState<string | null>(null)
@@ -55,15 +79,15 @@ export default function DoctorDashboard() {
     getDoctorAppointments().then(setAppointments)
     if (user) {
       getAvailability(user.id).then(setSlots)
-      getDoctors().then((docs: any[]) => {
-        const me = docs.find(d => d._id === user.id)
-        if (me?.profile) {
+      getMyDoctorProfile().then((profile: any) => {
+        if (profile) {
           setHasProfile(true)
+          setProfileVerified(profile.verified === true)
           setProfileForm({
-            specialization: me.profile.specialization || '',
-            hospital: me.profile.hospital || '',
-            consultationFee: String(me.profile.consultationFee ?? ''),
-            bio: me.profile.bio || ''
+            specialization: profile.specialization || '',
+            hospital: profile.hospital || '',
+            consultationFee: String(profile.consultationFee ?? ''),
+            bio: profile.bio || ''
           })
         }
       })
@@ -124,11 +148,12 @@ export default function DoctorDashboard() {
       if (hasProfile) {
         await updateDoctorProfile({ ...profileForm, consultationFee: Number(profileForm.consultationFee) })
         setEditingProfile(false)
-        setProfileMsg('Profile updated successfully!')
+        setProfileMsg('Profile updated. Changes are pending re-verification.')
       } else {
         await createDoctorProfile({ ...profileForm, consultationFee: Number(profileForm.consultationFee) })
         setHasProfile(true)
-        setProfileMsg('Profile created successfully!')
+        setProfileVerified(false)
+        setProfileMsg('Profile submitted for admin verification.')
       }
     } catch (err: any) { setProfileMsg(err.message) }
   }
@@ -146,6 +171,82 @@ export default function DoctorDashboard() {
       setPwForm({ current: '', next: '', confirm: '' })
     } catch (err: any) { setPwMsg(err.message) }
     finally { setPwLoading(false) }
+  }
+
+  const handleOpenRx = async (appt: Appointment) => {
+    setRxFor(appt._id); setRxMsg('')
+    if (!rxCache[appt._id]) {
+      try {
+        const existing = await getAppointmentPrescription(appt._id) as any
+        if (existing) {
+          setRxCache(prev => ({ ...prev, [appt._id]: existing }))
+          setRxMeds(existing.medications)
+          setRxNotes(existing.notes || '')
+        } else { setRxMeds([emptyMed()]); setRxNotes('') }
+      } catch { setRxMeds([emptyMed()]); setRxNotes('') }
+    } else {
+      const ex = rxCache[appt._id]
+      setRxMeds(ex.medications); setRxNotes(ex.notes || '')
+    }
+  }
+
+  const handleSaveRx = async (appointmentId: string) => {
+    const valid = rxMeds.filter(m => m.name.trim() && m.dosage.trim() && m.frequency.trim() && m.duration.trim())
+    if (!valid.length) { setRxMsg('Add at least one complete medication.'); return }
+    setRxSaving(true); setRxMsg('')
+    try {
+      const res = await savePrescription({ appointmentId, medications: valid, notes: rxNotes }) as any
+      setRxCache(prev => ({ ...prev, [appointmentId]: res.prescription }))
+      setRxMsg('Prescription saved.')
+      setTimeout(() => { setRxMsg(''); setRxFor(null) }, 1500)
+    } catch (err: any) { setRxMsg(err.message) }
+    finally { setRxSaving(false) }
+  }
+
+  const handleToggleMedProfile = async (appt: Appointment) => {
+    const patientId = typeof appt.patient === 'object' ? appt.patient._id : appt.patient
+    if (medOpen === patientId) { setMedOpen(null); return }
+    setMedOpen(patientId)
+    if (!medProfiles[patientId]) {
+      try {
+        const profile = await getPatientMedicalProfile(patientId)
+        setMedProfiles(prev => ({ ...prev, [patientId]: profile }))
+      } catch { setMedProfiles(prev => ({ ...prev, [patientId]: null })) }
+    }
+  }
+
+  const handleViewHealth = async (appt: Appointment) => {
+    const patientId = typeof appt.patient === 'object' ? appt.patient._id : appt.patient
+    const name = patientName(appt)
+    setHealthPatient({ id: patientId, name })
+    setPatientMetrics([])
+    setMetricsLoading(true)
+
+    // Subscribe to live updates for this patient's health room
+    if (healthSocketRef.current) healthSocketRef.current.disconnect()
+    const socket = io('http://localhost:5000', { auth: { token } })
+    healthSocketRef.current = socket
+    socket.on('connect', () => {
+      setHealthLive(true)
+      // Join patient's health room — server uses same room key
+      socket.emit('join-health-patient', patientId)
+    })
+    socket.on('disconnect', () => setHealthLive(false))
+    socket.on('health-update', (metric: any) => {
+      setPatientMetrics(prev => [metric, ...prev])
+    })
+
+    try {
+      const data = await getPatientHealthMetrics(patientId)
+      setPatientMetrics(data)
+    } catch { /* patient may have no devices */ }
+    finally { setMetricsLoading(false) }
+  }
+
+  const handleCloseHealth = () => {
+    setHealthPatient(null)
+    if (healthSocketRef.current) { healthSocketRef.current.disconnect(); healthSocketRef.current = null }
+    setHealthLive(false)
   }
 
   const statusColor = (s: string) => ({
@@ -178,6 +279,20 @@ export default function DoctorDashboard() {
               </div>
             </div>
           </div>
+
+          {/* Verification banner */}
+          {hasProfile && !profileVerified && (
+            <div className="mx-6 mt-4 p-4 rounded-2xl flex items-start gap-3"
+              style={{ background: '#FEF3C7' }}>
+              <span className="text-lg flex-shrink-0">⏳</span>
+              <div>
+                <p className="font-semibold text-sm" style={{ color: '#92400E' }}>Pending Verification</p>
+                <p className="text-xs mt-0.5" style={{ color: '#A16207' }}>
+                  Your profile is awaiting admin approval. You won't appear in patient search until verified.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="px-6 mt-5">
             <div className="grid grid-cols-2 gap-3 mb-6">
@@ -330,6 +445,16 @@ export default function DoctorDashboard() {
                         style={{ background: '#FEE2E2', color: '#DC2626' }}>Decline</button>
                     </>}
                     {a.status === 'confirmed' && notesFor !== a._id && (
+                      <a
+                        href={`https://meet.jit.si/chipatara-${a._id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-xl"
+                        style={{ background: '#D1FAE5', color: '#065F46' }}>
+                        <Video size={12} /> Join Video Call
+                      </a>
+                    )}
+                    {a.status === 'confirmed' && notesFor !== a._id && (
                       <button onClick={() => handleMarkCompleted(a)}
                         className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-xl"
                         style={{ background: '#DBEAFE', color: '#1E40AF' }}>
@@ -343,7 +468,107 @@ export default function DoctorDashboard() {
                         <MessageCircle size={12} /> Chat
                       </button>
                     )}
+                    {['confirmed', 'completed'].includes(a.status) && (
+                      <button onClick={() => handleViewHealth(a)}
+                        className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-xl"
+                        style={{ background: '#ECFDF5', color: '#059669' }}>
+                        <Activity size={12} /> Health
+                      </button>
+                    )}
+                    <button onClick={() => handleToggleMedProfile(a)}
+                      className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-xl"
+                      style={{ background: '#F3E8FF', color: '#7C3AED' }}>
+                      🩺 Medical
+                    </button>
+                    {a.status === 'completed' && (
+                      <button onClick={() => rxFor === a._id ? setRxFor(null) : handleOpenRx(a)}
+                        className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-xl"
+                        style={{ background: rxCache[a._id] ? '#D1FAE5' : '#FEF3C7', color: rxCache[a._id] ? '#065F46' : '#92400E' }}>
+                        💊 {rxCache[a._id] ? 'Prescription ✓' : 'Prescribe'}
+                      </button>
+                    )}
                   </div>
+
+                  {/* Prescription form */}
+                  {rxFor === a._id && (
+                    <div className="mt-3 p-4 rounded-2xl space-y-3" style={{ background: '#FFFBEB' }}>
+                      <p className="font-bold text-xs" style={{ color: '#92400E' }}>PRESCRIPTION</p>
+                      {rxMsg && <p className="text-xs" style={{ color: rxMsg.includes('saved') ? '#065F46' : '#DC2626' }}>{rxMsg}</p>}
+                      {rxMeds.map((med, i) => (
+                        <div key={i} className="bg-white rounded-xl p-3 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <p className="text-xs font-medium" style={{ color: '#92400E' }}>Medication {i + 1}</p>
+                            {rxMeds.length > 1 && (
+                              <button onClick={() => setRxMeds(prev => prev.filter((_, j) => j !== i))}
+                                className="text-xs" style={{ color: '#DC2626' }}>Remove</button>
+                            )}
+                          </div>
+                          {[
+                            { key: 'name', placeholder: 'Drug name (e.g. Amoxicillin)' },
+                            { key: 'dosage', placeholder: 'Dosage (e.g. 500mg)' },
+                            { key: 'frequency', placeholder: 'Frequency (e.g. 3x daily)' },
+                            { key: 'duration', placeholder: 'Duration (e.g. 7 days)' },
+                            { key: 'instructions', placeholder: 'Instructions (e.g. take with food)' },
+                          ].map(({ key, placeholder }) => (
+                            <input key={key} type="text" placeholder={placeholder}
+                              value={(med as any)[key]}
+                              onChange={e => setRxMeds(prev => prev.map((m, j) => j === i ? { ...m, [key]: e.target.value } : m))}
+                              className="input-field text-xs w-full" style={{ paddingLeft: '0.75rem', paddingTop: '0.5rem', paddingBottom: '0.5rem' }} />
+                          ))}
+                        </div>
+                      ))}
+                      <button onClick={() => setRxMeds(prev => [...prev, emptyMed()])}
+                        className="text-xs font-medium px-3 py-1.5 rounded-xl w-full"
+                        style={{ background: '#FEF3C7', color: '#92400E' }}>
+                        + Add Another Medication
+                      </button>
+                      <textarea value={rxNotes} onChange={e => setRxNotes(e.target.value)}
+                        placeholder="Additional notes (optional)…" rows={2}
+                        className="input-field resize-none w-full text-xs"
+                        style={{ paddingLeft: '0.75rem', paddingTop: '0.5rem' }} />
+                      <div className="flex gap-2">
+                        <button onClick={() => handleSaveRx(a._id)} disabled={rxSaving}
+                          className="text-xs font-medium px-4 py-1.5 rounded-xl"
+                          style={{ background: '#D97706', color: '#fff' }}>
+                          {rxSaving ? 'Saving…' : 'Save Prescription'}
+                        </button>
+                        <button onClick={() => setRxFor(null)}
+                          className="text-xs font-medium px-4 py-1.5 rounded-xl"
+                          style={{ background: '#F3F4F6', color: '#6B7280' }}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Inline medical profile panel */}
+                  {medOpen === (typeof a.patient === 'object' ? a.patient._id : a.patient) && (() => {
+                    const pid = typeof a.patient === 'object' ? a.patient._id : a.patient
+                    const mp = medProfiles[pid]
+                    if (mp === undefined) return (
+                      <div className="mt-3 text-xs text-center py-2" style={{ color: '#9CA3AF' }}>Loading…</div>
+                    )
+                    if (!mp) return (
+                      <div className="mt-3 p-3 rounded-xl text-xs" style={{ background: '#F8F9FE', color: '#9CA3AF' }}>
+                        Patient has not filled in their medical history yet.
+                      </div>
+                    )
+                    return (
+                      <div className="mt-3 p-4 rounded-2xl space-y-1.5 text-xs" style={{ background: '#FAF5FF' }}>
+                        <p className="font-bold text-xs mb-2" style={{ color: '#7C3AED' }}>MEDICAL HISTORY</p>
+                        {[
+                          { label: 'Blood Type', value: mp.bloodType },
+                          { label: 'Allergies', value: mp.allergies },
+                          { label: 'Chronic Conditions', value: mp.chronicConditions },
+                          { label: 'Current Medications', value: mp.currentMedications },
+                          { label: 'Emergency Contact', value: mp.emergencyContactName ? `${mp.emergencyContactName} ${mp.emergencyContactPhone}` : null },
+                        ].filter(r => r.value && r.value !== 'Unknown').map(r => (
+                          <div key={r.label} className="flex gap-2">
+                            <span className="font-medium flex-shrink-0" style={{ color: '#6B7280', minWidth: 120 }}>{r.label}:</span>
+                            <span style={{ color: '#1B1B2F' }}>{r.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
                 </div>
               )
             })}
@@ -490,6 +715,92 @@ export default function DoctorDashboard() {
         </div>
       )}
 
+      {healthPatient && (
+        <div className="absolute inset-0 overflow-y-auto" style={{ background: '#F8F9FE', zIndex: 50 }}>
+          <div className="px-6 pt-12 pb-4 flex items-center gap-3 sticky top-0" style={{ background: '#ECFDF5' }}>
+            <button onClick={handleCloseHealth}><X size={20} style={{ color: '#059669' }} /></button>
+            <div className="flex-1">
+              <h2 className="text-base font-bold" style={{ color: '#1B1B2F' }}>{healthPatient.name}</h2>
+              <p className="text-xs" style={{ color: '#6B7280' }}>Health Metrics</p>
+            </div>
+            {healthLive ? (
+              <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full"
+                style={{ background: '#D1FAE5', color: '#065F46' }}>
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#059669' }} />
+                LIVE
+              </span>
+            ) : (
+              <span className="text-xs px-2 py-1 rounded-full" style={{ background: '#F3F4F6', color: '#9CA3AF' }}>Connecting…</span>
+            )}
+          </div>
+          <div className="px-6 py-5">
+            {metricsLoading && (
+              <div className="flex justify-center py-12">
+                <div className="w-6 h-6 rounded-full border-2 animate-spin"
+                  style={{ borderColor: '#D1FAE5', borderTopColor: '#059669' }} />
+              </div>
+            )}
+            {!metricsLoading && patientMetrics.length === 0 && (
+              <div className="text-center py-12">
+                <Activity size={40} style={{ color: '#D1FAE5', margin: '0 auto 12px' }} />
+                <p className="font-medium text-sm" style={{ color: '#1B1B2F' }}>No health data available</p>
+                <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>This patient hasn't connected a device yet.</p>
+              </div>
+            )}
+            {!metricsLoading && patientMetrics.length > 0 && (() => {
+              const latest = patientMetrics[0]
+              const items = [
+                { label: 'Heart Rate', value: latest.heartRate, unit: 'bpm', icon: '💓', alert: latest.heartRate != null && (latest.heartRate > 120 || latest.heartRate < 40) },
+                { label: 'Blood Oxygen', value: latest.spO2, unit: '%', icon: '🩸', alert: latest.spO2 != null && latest.spO2 < 94 },
+                { label: 'Steps', value: latest.steps, unit: 'steps', icon: '👟', alert: false },
+                { label: 'Temperature', value: latest.temperature, unit: '°C', icon: '🌡️', alert: latest.temperature != null && latest.temperature > 38.5 },
+                { label: 'BP', value: latest.systolic != null ? `${latest.systolic}/${latest.diastolic ?? '?'}` : null, unit: 'mmHg', icon: '🫀', alert: latest.systolic != null && latest.systolic > 140 },
+                { label: 'Sleep', value: latest.sleepHours, unit: 'hrs', icon: '😴', alert: false },
+              ].filter(m => m.value != null)
+              return (
+                <>
+                  <p className="text-xs font-bold tracking-widest mb-3" style={{ color: '#9CA3AF' }}>LATEST READINGS</p>
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    {items.map(m => (
+                      <div key={m.label} className="bg-white rounded-2xl p-4 shadow-sm"
+                        style={{ border: m.alert ? '1.5px solid #FCA5A5' : 'none' }}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-lg">{m.icon}</span>
+                          {m.alert && <span className="text-xs font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#FEE2E2', color: '#DC2626' }}>!</span>}
+                        </div>
+                        <p className="text-xl font-bold" style={{ color: m.alert ? '#DC2626' : '#1B1B2F' }}>{m.value}</p>
+                        <p className="text-xs" style={{ color: '#6B7280' }}>{m.unit}</p>
+                        <p className="text-xs font-medium mt-0.5" style={{ color: '#9CA3AF' }}>{m.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs mb-4" style={{ color: '#9CA3AF' }}>
+                    Last update: {new Date(latest.timestamp).toLocaleString()}
+                    {latest.device?.name && ` · ${latest.device.name}`}
+                  </p>
+                  <p className="text-xs font-bold tracking-widest mb-2" style={{ color: '#9CA3AF' }}>HISTORY</p>
+                  <div className="space-y-2">
+                    {patientMetrics.slice(0, 10).map((m: any, i: number) => (
+                      <div key={i} className="bg-white rounded-xl px-4 py-3 flex flex-wrap gap-3 shadow-sm">
+                        <span className="text-xs font-medium" style={{ color: '#9CA3AF', minWidth: '100%' }}>
+                          {new Date(m.timestamp).toLocaleString()}
+                        </span>
+                        {m.heartRate != null && <span className="text-xs">💓 {m.heartRate} bpm</span>}
+                        {m.spO2 != null && <span className="text-xs">🩸 {m.spO2}%</span>}
+                        {m.steps != null && <span className="text-xs">👟 {m.steps}</span>}
+                        {m.temperature != null && <span className="text-xs">🌡️ {m.temperature}°C</span>}
+                        {m.systolic != null && <span className="text-xs">🫀 {m.systolic}/{m.diastolic ?? '?'}</span>}
+                        {m.sleepHours != null && <span className="text-xs">😴 {m.sleepHours}h</span>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+        </div>
+      )}
+
       {chatAppt && (
         <div className="absolute inset-0" style={{ background: '#fff', zIndex: 50 }}>
           <ChatScreen
@@ -502,7 +813,13 @@ export default function DoctorDashboard() {
         </div>
       )}
 
-      <BottomNav active={tab} onTab={setTab} />
+      <BottomNav
+        active={tab}
+        onTab={setTab}
+        badges={{
+          appointments: appointments.filter(a => a.status === 'pending').length,
+        }}
+      />
     </div>
   )
 }

@@ -1,0 +1,14 @@
+{
+  "name": "Chipatara Telemedicine",
+  "short_name": "Chipatara",
+  "description": "Connect with doctors, monitor your health, consult from anywhere.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#EBF0FF",
+  "theme_color": "#3B5BDB",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

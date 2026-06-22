@@ -118,4 +118,32 @@ router.put("/:id/rating", authMiddleware, async (req, res) => {
   }
 });
 
+// PUT /:id/reschedule — patient reschedules a pending or confirmed appointment
+router.put("/:id/reschedule", authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== "patient") {
+      return res.status(403).json({ message: "Only patients can reschedule appointments." });
+    }
+    const { date } = req.body;
+    if (!date) return res.status(400).json({ message: "New date is required." });
+
+    const appointment = await Appointment.findById(req.params.id);
+    if (!appointment) return res.status(404).json({ message: "Appointment not found." });
+    if (appointment.patient.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized to reschedule this appointment." });
+    }
+    if (!["pending", "confirmed"].includes(appointment.status)) {
+      return res.status(400).json({ message: `Cannot reschedule a ${appointment.status} appointment.` });
+    }
+
+    appointment.date = new Date(date);
+    appointment.status = "pending"; // reset to pending so doctor re-confirms
+    await appointment.save();
+
+    res.json({ message: "Appointment rescheduled. Awaiting doctor confirmation.", appointment });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;

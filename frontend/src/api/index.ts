@@ -24,6 +24,42 @@ export type SymptomResult = {
 export const getAppointmentMessages = (appointmentId: string) =>
   request<any[]>(`/messages/${appointmentId}`, { headers: headers(true) })
 
+// Devices & Health Metrics
+export const registerDevice = (body: { name: string; type: string }) =>
+  request<any>('/devices', { method: 'POST', headers: headers(true), body: JSON.stringify(body) })
+
+export const getMyDevices = () =>
+  request<any[]>('/devices', { headers: headers(true) })
+
+export const deleteDevice = (id: string) =>
+  request(`/devices/${id}`, { method: 'DELETE', headers: headers(true) })
+
+export const getMyHealthMetrics = () =>
+  request<any[]>('/devices/metrics', { headers: headers(true) })
+
+export const getPatientHealthMetrics = (patientId: string) =>
+  request<any[]>(`/devices/metrics/${patientId}`, { headers: headers(true) })
+
+// Medical profile
+export const getMyMedicalProfile = () =>
+  request<any | null>('/medical-profile', { headers: headers(true) })
+
+export const saveMedicalProfile = (body: object) =>
+  request('/medical-profile', { method: 'PUT', headers: headers(true), body: JSON.stringify(body) })
+
+export const getPatientMedicalProfile = (patientId: string) =>
+  request<any | null>(`/medical-profile/${patientId}`, { headers: headers(true) })
+
+// Prescriptions
+export const savePrescription = (body: object) =>
+  request('/prescriptions', { method: 'POST', headers: headers(true), body: JSON.stringify(body) })
+
+export const getAppointmentPrescription = (appointmentId: string) =>
+  request<any | null>(`/prescriptions/appointment/${appointmentId}`, { headers: headers(true) })
+
+export const getMyPrescriptions = () =>
+  request<any[]>('/prescriptions/my', { headers: headers(true) })
+
 // AI Service
 export const checkSymptoms = (symptoms: string, patientHistory?: string) =>
   aiRequest<SymptomResult>('/symptoms', { symptoms, patientHistory })
@@ -68,16 +104,22 @@ export const resetPassword = (token: string, password: string) =>
   request('/auth/reset-password', { method: 'POST', headers: headers(), body: JSON.stringify({ token, password }) })
 
 // Doctors
-export const getDoctors = (search = '', specialization = '') => {
+export const getDoctors = (search = '', specialization = '', minFee?: number, maxFee?: number, minRating?: number) => {
   const params = new URLSearchParams()
   if (search) params.set('search', search)
   if (specialization) params.set('specialization', specialization)
+  if (minFee !== undefined) params.set('minFee', String(minFee))
+  if (maxFee !== undefined) params.set('maxFee', String(maxFee))
+  if (minRating !== undefined && minRating > 0) params.set('minRating', String(minRating))
   const qs = params.toString()
   return request<any[]>(`/doctors${qs ? `?${qs}` : ''}`)
 }
 
 export const getSpecializations = () =>
   request<string[]>('/doctors/specializations')
+
+export const getMyDoctorProfile = () =>
+  request<any | null>('/doctors/me', { headers: headers(true) })
 
 export const createDoctorProfile = (body: object) =>
   request('/doctors/profile', { method: 'POST', headers: headers(true), body: JSON.stringify(body) })
@@ -114,6 +156,9 @@ export const updateAppointmentStatus = (id: string, status: string) =>
 export const cancelAppointment = (id: string) =>
   request(`/appointments/${id}/cancel`, { method: 'PUT', headers: headers(true) })
 
+export const rescheduleAppointment = (id: string, date: string) =>
+  request(`/appointments/${id}/reschedule`, { method: 'PUT', headers: headers(true), body: JSON.stringify({ date }) })
+
 export const saveConsultationNotes = (id: string, notes: string) =>
   request(`/appointments/${id}/notes`, { method: 'PUT', headers: headers(true), body: JSON.stringify({ notes }) })
 
@@ -123,6 +168,15 @@ export const rateAppointment = (id: string, rating: number, review?: string) =>
 // Admin
 export const adminGetUsers = () =>
   request<any[]>('/admin/users', { headers: headers(true) })
+
+export const adminGetDoctors = () =>
+  request<any[]>('/admin/doctors', { headers: headers(true) })
+
+export const adminVerifyDoctor = (id: string) =>
+  request(`/admin/doctors/${id}/verify`, { method: 'PUT', headers: headers(true) })
+
+export const adminRejectDoctor = (id: string) =>
+  request(`/admin/doctors/${id}/reject`, { method: 'PUT', headers: headers(true) })
 
 export const adminDeleteUser = (id: string) =>
   request(`/admin/users/${id}`, { method: 'DELETE', headers: headers(true) })

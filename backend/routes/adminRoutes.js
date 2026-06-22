@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
 const Appointment = require("../models/Appointment");
+const Doctor = require("../models/Doctor");
 const authMiddleware = require("../middleware/authMiddleware");
 const roleMiddleware = require("../middleware/roleMiddleware");
 
@@ -70,6 +71,38 @@ router.put("/appointments/:id/status", ...adminOnly, async (req, res) => {
     await appointment.save();
 
     res.json({ message: `Appointment status updated to ${status}`, appointment });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// GET /api/admin/doctors — list all doctor profiles with user info
+router.get("/doctors", ...adminOnly, async (req, res) => {
+  try {
+    const profiles = await Doctor.find().populate("user", "name email").sort({ createdAt: -1 }).lean();
+    res.json(profiles);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// PUT /api/admin/doctors/:id/verify — approve a doctor
+router.put("/doctors/:id/verify", ...adminOnly, async (req, res) => {
+  try {
+    const profile = await Doctor.findByIdAndUpdate(req.params.id, { verified: true }, { new: true });
+    if (!profile) return res.status(404).json({ message: "Doctor profile not found" });
+    res.json({ message: "Doctor verified successfully", profile });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// PUT /api/admin/doctors/:id/reject — reject a doctor (resets to unverified)
+router.put("/doctors/:id/reject", ...adminOnly, async (req, res) => {
+  try {
+    const profile = await Doctor.findByIdAndUpdate(req.params.id, { verified: false }, { new: true });
+    if (!profile) return res.status(404).json({ message: "Doctor profile not found" });
+    res.json({ message: "Doctor rejected", profile });
   } catch (error) {
     res.status(500).json({ message: "Server error" });
   }

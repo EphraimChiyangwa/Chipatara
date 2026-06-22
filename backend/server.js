@@ -30,6 +30,12 @@ const availabilityRoutes = require('./routes/availabilityRoutes')
 const doctorRoutes      = require('./routes/doctorRoutes')
 const adminRoutes       = require('./routes/adminRoutes')
 const messageRoutes     = require('./routes/messageRoutes')
+const deviceRoutes         = require('./routes/deviceRoutes')
+const medicalProfileRoutes  = require('./routes/medicalProfileRoutes')
+const prescriptionRoutes    = require('./routes/prescriptionRoutes')
+
+// Attach socket.io instance to every request for routes that need real-time push
+app.use((req, _res, next) => { req.io = io; next() })
 
 app.use('/api/auth',         authRoutes)
 app.use('/api/appointments', appointmentRoutes)
@@ -37,6 +43,9 @@ app.use('/api/availability', availabilityRoutes)
 app.use('/api/doctors',      doctorRoutes)
 app.use('/api/admin',        adminRoutes)
 app.use('/api/messages',     messageRoutes)
+app.use('/api/devices',         deviceRoutes)
+app.use('/api/medical-profile',  medicalProfileRoutes)
+app.use('/api/prescriptions',    prescriptionRoutes)
 
 // ── Socket.io chat ──────────────────────────────────────────────
 io.use((socket, next) => {
@@ -60,6 +69,23 @@ io.on('connection', (socket) => {
       const allowed = appt.patient.toString() === uid || appt.doctor.toString() === uid
       if (!allowed) return
       socket.join(appointmentId)
+    } catch { /* ignore */ }
+  })
+
+  // Patient joins their own health room
+  socket.on('join-health', () => {
+    socket.join(`health-${socket.user.id}`)
+  })
+
+  // Doctor joins a patient's health room (only if they have an appointment)
+  socket.on('join-health-patient', async (patientId) => {
+    try {
+      const appt = await Appointment.findOne({
+        doctor: socket.user.id,
+        patient: patientId,
+        status: { $in: ['confirmed', 'completed'] }
+      })
+      if (appt) socket.join(`health-${patientId}`)
     } catch { /* ignore */ }
   })
 

@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react'
-import { MapPin, ChevronRight, X, Clock, Search, Brain, Star } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { io, Socket } from 'socket.io-client'
+import { MapPin, ChevronRight, X, Clock, Search, Brain, Star, Video, Activity, Trash2, Copy, Check } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import {
   getDoctors, getSpecializations, getAvailability, bookAppointment,
   getPatientAppointments, cancelAppointment, checkSymptoms, type SymptomResult,
-  rateAppointment, changePassword
+  rateAppointment, changePassword,
+  registerDevice, getMyDevices, deleteDevice, getMyHealthMetrics,
+  getMyMedicalProfile, saveMedicalProfile,
+  getAppointmentPrescription, rescheduleAppointment
 } from '../api'
 import BottomNav from '../components/BottomNav'
 import PaymentSummary from './PaymentSummary'
@@ -12,7 +16,7 @@ import ChatScreen from '../components/ChatScreen'
 
 type Doctor = { _id: string; name: string; email: string; profile: any }
 type Slot = { _id: string; day: string; startTime: string; endTime: string }
-type Appointment = { _id: string; doctor: { _id: string; name: string } | string; date: string; reason: string; status: string; rating?: number; review?: string }
+type Appointment = { _id: string; doctor: { _id: string; name: string } | string; date: string; reason: string; status: string; notes?: string; rating?: number; review?: string }
 type Tab = 'home' | 'appointments' | 'messages' | 'profile'
 
 export default function PatientDashboard() {
@@ -22,6 +26,10 @@ export default function PatientDashboard() {
   const [search, setSearch] = useState('')
   const [specialization, setSpecialization] = useState('')
   const [specializations, setSpecializations] = useState<string[]>([])
+  const [minFee, setMinFee] = useState('')
+  const [maxFee, setMaxFee] = useState('')
+  const [minRating, setMinRating] = useState(0)
+  const [showFilters, setShowFilters] = useState(false)
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
   const [availability, setAvailability] = useState<Slot[]>([])
   const [date, setDate] = useState('')
@@ -47,16 +55,118 @@ export default function PatientDashboard() {
   const [chatAppt, setChatAppt] = useState<Appointment | null>(null)
   const { token } = useAuth()
 
+  // Health monitoring
+  const [showHealth, setShowHealth] = useState(false)
+  const [devices, setDevices] = useState<any[]>([])
+  const [healthMetrics, setHealthMetrics] = useState<any[]>([])
+  const [showAddDevice, setShowAddDevice] = useState(false)
+  const [addDeviceForm, setAddDeviceForm] = useState({ name: '', type: 'smartwatch' })
+  const [newDevice, setNewDevice] = useState<any>(null)
+  const [healthLoading, setHealthLoading] = useState(false)
+  const [copiedToken, setCopiedToken] = useState(false)
+  const [liveConnected, setLiveConnected] = useState(false)
+  const [newDataFlash, setNewDataFlash] = useState(false)
+  const healthSocketRef = useRef<Socket | null>(null)
+
+  // Rescheduling
+  const [rescheduleFor, setRescheduleFor] = useState<string | null>(null)
+  const [rescheduleDate, setRescheduleDate] = useState('')
+
+  // Prescriptions
+  const [rxOpen, setRxOpen] = useState<string | null>(null)
+  const [rxCache, setRxCache] = useState<Record<string, any>>({})
+
+  // Medical profile
+  const [medForm, setMedForm] = useState({ bloodType: 'Unknown', allergies: '', chronicConditions: '', currentMedications: '', emergencyContactName: '', emergencyContactPhone: '' })
+  const [medMsg, setMedMsg] = useState('')
+  const [medLoading, setMedLoading] = useState(false)
+
   // Password change
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
   const [pwMsg, setPwMsg] = useState('')
   const [pwLoading, setPwLoading] = useState(false)
 
   useEffect(() => { getSpecializations().then(setSpecializations) }, [])
-  useEffect(() => { getDoctors(search, specialization).then(setDoctors) }, [search, specialization])
+  useEffect(() => {
+    getDoctors(
+      search, specialization,
+      minFee !== '' ? Number(minFee) : undefined,
+      maxFee !== '' ? Number(maxFee) : undefined,
+      minRating > 0 ? minRating : undefined
+    ).then(setDoctors)
+  }, [search, specialization, minFee, maxFee, minRating])
   useEffect(() => {
     if (tab === 'appointments' || tab === 'messages') getPatientAppointments().then(setAppointments)
+    if (tab === 'profile') {
+      getMyMedicalProfile().then((p: any) => {
+        if (p) setMedForm({ bloodType: p.bloodType || 'Unknown', allergies: p.allergies || '', chronicConditions: p.chronicConditions || '', currentMedications: p.currentMedications || '', emergencyContactName: p.emergencyContactName || '', emergencyContactPhone: p.emergencyContactPhone || '' })
+      }).catch(() => {})
+    }
   }, [tab])
+
+  // Real-time health socket — connect when health screen opens, disconnect on close
+  useEffect(() => {
+    if (!showHealth || !token) return
+
+    const socket = io('http://localhost:5000', { auth: { token } })
+    healthSocketRef.current = socket
+
+    socket.on('connect', () => {
+      setLiveConnected(true)
+      socket.emit('join-health')
+    })
+    socket.on('disconnect', () => setLiveConnected(false))
+
+    socket.on('health-update', (metric: any) => {
+      setHealthMetrics(prev => [metric, ...prev])
+      setNewDataFlash(true)
+      setTimeout(() => setNewDataFlash(false), 1500)
+    })
+
+    return () => {
+      socket.disconnect()
+      healthSocketRef.current = null
+      setLiveConnected(false)
+    }
+  }, [showHealth, token])
+
+  const loadHealthData = () => {
+    setHealthLoading(true)
+    Promise.all([getMyDevices(), getMyHealthMetrics()])
+      .then(([devs, metrics]) => { setDevices(devs); setHealthMetrics(metrics) })
+      .catch(() => {})
+      .finally(() => setHealthLoading(false))
+  }
+
+  const handleOpenHealth = () => {
+    setShowHealth(true)
+    setNewDevice(null)
+    setShowAddDevice(false)
+    loadHealthData()
+  }
+
+  const handleAddDevice = async () => {
+    if (!addDeviceForm.name.trim()) return
+    try {
+      const res = await registerDevice(addDeviceForm) as any
+      setNewDevice(res.device)
+      setDevices(prev => [res.device, ...prev])
+      setShowAddDevice(false)
+      setAddDeviceForm({ name: '', type: 'smartwatch' })
+    } catch { /* silently fail */ }
+  }
+
+  const handleDeleteDevice = async (id: string) => {
+    await deleteDevice(id)
+    setDevices(prev => prev.filter(d => d._id !== id))
+  }
+
+  const copyToken = (token: string) => {
+    navigator.clipboard.writeText(token).then(() => {
+      setCopiedToken(true)
+      setTimeout(() => setCopiedToken(false), 2000)
+    })
+  }
 
   const selectDoctor = async (doc: Doctor) => {
     setSelectedDoctor(doc)
@@ -84,6 +194,27 @@ export default function PatientDashboard() {
       setRatingMsg('Thank you for your feedback!')
       setTimeout(() => setRatingMsg(''), 3000)
     } catch (err: any) { setRatingMsg(err.message) }
+  }
+
+  const handleReschedule = async (id: string) => {
+    if (!rescheduleDate) return
+    try {
+      await rescheduleAppointment(id, rescheduleDate)
+      setAppointments(prev => prev.map(a => a._id === id ? { ...a, status: 'pending', date: rescheduleDate } : a))
+      setRescheduleFor(null); setRescheduleDate('')
+      setApptMsg('Appointment rescheduled. Awaiting doctor confirmation.')
+      setTimeout(() => setApptMsg(''), 4000)
+    } catch (err: any) { setApptMsg(err.message) }
+  }
+
+  const handleSaveMedical = async () => {
+    setMedLoading(true); setMedMsg('')
+    try {
+      await saveMedicalProfile(medForm)
+      setMedMsg('Medical profile saved.')
+      setTimeout(() => setMedMsg(''), 3000)
+    } catch (err: any) { setMedMsg(err.message) }
+    finally { setMedLoading(false) }
   }
 
   const handleChangePassword = async () => {
@@ -178,6 +309,23 @@ export default function PatientDashboard() {
               </button>
             </div>
 
+            {/* Health Monitoring Banner */}
+            <button
+              onClick={handleOpenHealth}
+              className="w-full rounded-2xl p-4 flex items-center gap-3 mb-3"
+              style={{ background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)' }}
+            >
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(255,255,255,0.2)' }}>
+                <Activity size={20} color="white" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-bold text-sm text-white">Health Monitoring</p>
+                <p className="text-xs" style={{ color: 'rgba(255,255,255,0.8)' }}>Connect your smartwatch · View live metrics</p>
+              </div>
+              <ChevronRight size={16} color="white" />
+            </button>
+
             {/* AI Symptom Checker Banner */}
             <button
               onClick={() => { setShowAI(true); setAiResult(null); setAiError(''); setAiSymptoms('') }}
@@ -213,6 +361,41 @@ export default function PatientDashboard() {
                   {specializations.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               )}
+              <button onClick={() => setShowFilters(f => !f)}
+                className="w-full text-sm font-medium px-4 py-2 rounded-xl flex items-center justify-center gap-2"
+                style={{ background: showFilters ? '#3B5BDB' : '#EBF0FF', color: showFilters ? '#fff' : '#3B5BDB' }}>
+                {showFilters ? '▲ Hide Filters' : '▼ More Filters'}
+              </button>
+              {showFilters && (
+                <div className="bg-white rounded-2xl p-4 space-y-3 shadow-sm">
+                  <div>
+                    <p className="text-xs font-medium mb-1" style={{ color: '#374151' }}>Fee Range ($)</p>
+                    <div className="flex gap-2">
+                      <input type="number" placeholder="Min" value={minFee} onChange={e => setMinFee(e.target.value)}
+                        min={0} className="input-field text-sm flex-1" style={{ paddingLeft: '0.75rem' }} />
+                      <input type="number" placeholder="Max" value={maxFee} onChange={e => setMaxFee(e.target.value)}
+                        min={0} className="input-field text-sm flex-1" style={{ paddingLeft: '0.75rem' }} />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium mb-2" style={{ color: '#374151' }}>Minimum Rating</p>
+                    <div className="flex gap-2">
+                      {[0, 1, 2, 3, 4, 5].map(r => (
+                        <button key={r} onClick={() => setMinRating(r)}
+                          className="flex-1 text-xs font-medium py-1.5 rounded-xl transition-all"
+                          style={{ background: minRating === r ? '#3B5BDB' : '#F3F4F6', color: minRating === r ? '#fff' : '#6B7280' }}>
+                          {r === 0 ? 'Any' : `${r}★`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {(minFee || maxFee || minRating > 0) && (
+                    <button onClick={() => { setMinFee(''); setMaxFee(''); setMinRating(0) }}
+                      className="text-xs font-medium px-3 py-1.5 rounded-xl"
+                      style={{ background: '#FEE2E2', color: '#DC2626' }}>Clear Filters</button>
+                  )}
+                </div>
+              )}
             </div>
             <div className="space-y-3">
               {doctors.map(doc => (
@@ -242,6 +425,203 @@ export default function PatientDashboard() {
               {doctors.length === 0 && (
                 <p className="text-sm text-center py-8" style={{ color: '#9CA3AF' }}>No doctors available yet.</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── HEALTH MONITORING ── */}
+      {showHealth && (
+        <div className="pb-24" style={{ overflowY: 'auto', height: '100dvh' }}>
+          <div className="px-6 pt-12 pb-4 flex items-center gap-3" style={{ background: '#ECFDF5' }}>
+            <button onClick={() => setShowHealth(false)}><X size={20} style={{ color: '#059669' }} /></button>
+            <h2 className="text-xl font-bold" style={{ color: '#1B1B2F' }}>Health Monitoring</h2>
+            <div className="ml-auto flex items-center gap-2">
+              {liveConnected ? (
+                <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full"
+                  style={{ background: '#D1FAE5', color: '#065F46' }}>
+                  <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#059669' }} />
+                  LIVE
+                </span>
+              ) : (
+                <span className="text-xs px-2 py-1 rounded-full" style={{ background: '#F3F4F6', color: '#9CA3AF' }}>
+                  Connecting…
+                </span>
+              )}
+              <button onClick={loadHealthData} className="text-xs font-medium px-3 py-1 rounded-xl"
+                style={{ background: '#D1FAE5', color: '#065F46' }}>
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          <div className="px-6 mt-5">
+            {healthLoading && (
+              <div className="flex justify-center py-8">
+                <div className="w-6 h-6 rounded-full border-2 animate-spin"
+                  style={{ borderColor: '#D1FAE5', borderTopColor: '#059669' }} />
+              </div>
+            )}
+
+            {/* Latest readings */}
+            {!healthLoading && healthMetrics.length > 0 && (() => {
+              const latest = healthMetrics[0]
+              const metrics = [
+                { key: 'heartRate', label: 'Heart Rate', value: latest.heartRate, unit: 'bpm', icon: '💓', alert: latest.heartRate != null && (latest.heartRate > 120 || latest.heartRate < 40) },
+                { key: 'spO2', label: 'Blood Oxygen', value: latest.spO2, unit: '%', icon: '🩸', alert: latest.spO2 != null && latest.spO2 < 94 },
+                { key: 'steps', label: 'Steps', value: latest.steps, unit: 'steps', icon: '👟', alert: false },
+                { key: 'temperature', label: 'Temperature', value: latest.temperature, unit: '°C', icon: '🌡️', alert: latest.temperature != null && latest.temperature > 38.5 },
+                { key: 'systolic', label: 'Blood Pressure', value: latest.systolic != null ? `${latest.systolic}/${latest.diastolic ?? '?'}` : null, unit: 'mmHg', icon: '🫀', alert: latest.systolic != null && latest.systolic > 140 },
+                { key: 'sleepHours', label: 'Sleep', value: latest.sleepHours, unit: 'hrs', icon: '😴', alert: false },
+              ].filter(m => m.value != null)
+
+              return metrics.length > 0 ? (
+                <div className="mb-6">
+                  <p className="text-xs font-bold tracking-widest mb-3" style={{ color: '#9CA3AF' }}>LATEST READINGS</p>
+                  <div className="grid grid-cols-2 gap-3"
+                    style={{ transition: 'opacity 0.3s', opacity: newDataFlash ? 0.6 : 1 }}>
+                    {metrics.map(m => (
+                      <div key={m.key} className="bg-white rounded-2xl p-4 shadow-sm"
+                        style={{ border: m.alert ? '1.5px solid #FCA5A5' : 'none' }}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-lg">{m.icon}</span>
+                          {m.alert && <span className="text-xs font-bold" style={{ color: '#DC2626' }}>!</span>}
+                        </div>
+                        <p className="text-xl font-bold" style={{ color: m.alert ? '#DC2626' : '#1B1B2F' }}>
+                          {m.value}
+                        </p>
+                        <p className="text-xs" style={{ color: '#6B7280' }}>{m.unit}</p>
+                        <p className="text-xs font-medium mt-0.5" style={{ color: '#9CA3AF' }}>{m.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs mt-2 text-right" style={{ color: '#9CA3AF' }}>
+                    Last update: {new Date(latest.timestamp).toLocaleString()}
+                    {latest.device?.name && ` · ${latest.device.name}`}
+                  </p>
+                </div>
+              ) : null
+            })()}
+
+            {/* No metrics yet */}
+            {!healthLoading && healthMetrics.length === 0 && devices.length > 0 && (
+              <div className="mb-5 p-4 rounded-2xl text-center" style={{ background: '#F8F9FE' }}>
+                <p className="text-sm font-medium" style={{ color: '#1B1B2F' }}>No readings yet</p>
+                <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>Your device hasn't sent data yet.</p>
+              </div>
+            )}
+
+            {/* New device token card */}
+            {newDevice && (
+              <div className="mb-5 rounded-2xl p-4" style={{ background: '#ECFDF5', border: '1.5px solid #6EE7B7' }}>
+                <p className="font-bold text-sm mb-1" style={{ color: '#065F46' }}>✅ Device Registered!</p>
+                <p className="text-xs mb-3" style={{ color: '#6B7280' }}>
+                  Save this token — it's shown only once. Configure your device to POST to:
+                </p>
+                <code className="block text-xs mb-2 px-3 py-2 rounded-xl break-all"
+                  style={{ background: '#fff', color: '#1B1B2F' }}>
+                  POST http://localhost:5000/api/devices/ingest
+                </code>
+                <p className="text-xs mb-1 font-medium" style={{ color: '#065F46' }}>X-Device-Token header:</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs px-3 py-2 rounded-xl break-all"
+                    style={{ background: '#fff', color: '#1B1B2F' }}>
+                    {newDevice.token}
+                  </code>
+                  <button onClick={() => copyToken(newDevice.token)}
+                    className="flex-shrink-0 p-2 rounded-xl"
+                    style={{ background: copiedToken ? '#D1FAE5' : '#fff' }}>
+                    {copiedToken ? <Check size={14} style={{ color: '#059669' }} /> : <Copy size={14} style={{ color: '#6B7280' }} />}
+                  </button>
+                </div>
+                <p className="text-xs mt-3 font-medium" style={{ color: '#065F46' }}>Sample JSON body:</p>
+                <code className="block text-xs mt-1 px-3 py-2 rounded-xl" style={{ background: '#fff', color: '#6B7280' }}>
+                  {'{ "heartRate": 72, "spO2": 98, "steps": 5000, "temperature": 36.8, "systolic": 120, "diastolic": 80, "sleepHours": 7.5 }'}
+                </code>
+              </div>
+            )}
+
+            {/* Connected devices */}
+            <div className="mb-4">
+              <div className="flex justify-between items-center mb-3">
+                <p className="font-semibold text-sm" style={{ color: '#1B1B2F' }}>Connected Devices</p>
+                {!showAddDevice && (
+                  <button onClick={() => setShowAddDevice(true)}
+                    className="text-xs font-medium px-3 py-1.5 rounded-xl"
+                    style={{ background: '#D1FAE5', color: '#065F46' }}>
+                    + Add Device
+                  </button>
+                )}
+              </div>
+
+              {/* Add device form */}
+              {showAddDevice && (
+                <div className="bg-white rounded-2xl p-4 shadow-sm mb-3 space-y-3">
+                  <input
+                    type="text"
+                    value={addDeviceForm.name}
+                    onChange={e => setAddDeviceForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="Device name (e.g. My Apple Watch)"
+                    className="input-field text-sm"
+                    style={{ paddingLeft: '1rem' }}
+                  />
+                  <select
+                    value={addDeviceForm.type}
+                    onChange={e => setAddDeviceForm(f => ({ ...f, type: e.target.value }))}
+                    className="input-field text-sm"
+                    style={{ paddingLeft: '1rem' }}>
+                    <option value="smartwatch">Smartwatch</option>
+                    <option value="fitness_band">Fitness Band</option>
+                    <option value="custom">Custom Device</option>
+                  </select>
+                  <div className="flex gap-2">
+                    <button onClick={handleAddDevice}
+                      className="text-xs font-medium px-4 py-1.5 rounded-xl"
+                      style={{ background: '#059669', color: '#fff' }}>
+                      Register
+                    </button>
+                    <button onClick={() => setShowAddDevice(false)}
+                      className="text-xs font-medium px-4 py-1.5 rounded-xl"
+                      style={{ background: '#F3F4F6', color: '#6B7280' }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {devices.length === 0 && !showAddDevice && (
+                <div className="text-center py-8 rounded-2xl" style={{ background: '#F8F9FE' }}>
+                  <Activity size={32} style={{ color: '#D1FAE5', margin: '0 auto 8px' }} />
+                  <p className="text-sm font-medium" style={{ color: '#1B1B2F' }}>No devices connected</p>
+                  <p className="text-xs mt-1 mb-3" style={{ color: '#9CA3AF' }}>Add your smartwatch or fitness tracker</p>
+                  <button onClick={() => setShowAddDevice(true)}
+                    className="text-xs font-medium px-4 py-2 rounded-xl"
+                    style={{ background: '#059669', color: '#fff' }}>
+                    + Add Device
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {devices.map(d => (
+                  <div key={d._id} className="bg-white rounded-2xl p-3 shadow-sm flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: d.active ? '#D1FAE5' : '#F3F4F6' }}>
+                      <Activity size={18} style={{ color: d.active ? '#059669' : '#9CA3AF' }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate" style={{ color: '#1B1B2F' }}>{d.name}</p>
+                      <p className="text-xs" style={{ color: '#9CA3AF' }}>
+                        {d.type.replace('_', ' ')} · {d.lastSeen ? `Last seen ${new Date(d.lastSeen).toLocaleDateString()}` : 'Never connected'}
+                      </p>
+                    </div>
+                    <button onClick={() => handleDeleteDevice(d._id)} className="p-2 rounded-xl"
+                      style={{ background: '#FEE2E2' }}>
+                      <Trash2 size={14} style={{ color: '#DC2626' }} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -390,12 +770,106 @@ export default function PatientDashboard() {
                         <Clock size={13} style={{ color: '#9CA3AF' }} />
                         <span className="text-xs" style={{ color: '#6B7280' }}>{new Date(a.date).toLocaleString()}</span>
                       </div>
-                      {['pending', 'confirmed'].includes(a.status) && (
-                        <button onClick={() => handleCancel(a._id)}
-                          className="text-xs font-medium px-3 py-1.5 rounded-xl"
-                          style={{ background: '#FEE2E2', color: '#DC2626' }}>
-                          Cancel Appointment
+                      {/* Join video call for confirmed appointments */}
+                      {a.status === 'confirmed' && (
+                        <a
+                          href={`https://meet.jit.si/chipatara-${a._id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-xl mb-2"
+                          style={{ background: '#D1FAE5', color: '#065F46' }}>
+                          <Video size={12} /> Join Video Call
+                        </a>
+                      )}
+
+                      {/* Consultation notes from doctor */}
+                      {a.status === 'completed' && a.notes && (
+                        <div className="mb-2 p-3 rounded-xl text-xs" style={{ background: '#F8F9FE', color: '#6B7280' }}>
+                          <span className="font-medium" style={{ color: '#1B1B2F' }}>Doctor's notes: </span>{a.notes}
+                        </div>
+                      )}
+
+                      {['pending', 'confirmed'].includes(a.status) && rescheduleFor !== a._id && (
+                        <div className="flex gap-2 flex-wrap">
+                          <button onClick={() => { setRescheduleFor(a._id); setRescheduleDate(a.date.slice(0, 16)) }}
+                            className="text-xs font-medium px-3 py-1.5 rounded-xl"
+                            style={{ background: '#EBF0FF', color: '#3B5BDB' }}>
+                            Reschedule
+                          </button>
+                          <button onClick={() => handleCancel(a._id)}
+                            className="text-xs font-medium px-3 py-1.5 rounded-xl"
+                            style={{ background: '#FEE2E2', color: '#DC2626' }}>
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                      {rescheduleFor === a._id && (
+                        <div className="mt-2 space-y-2">
+                          <input type="datetime-local" value={rescheduleDate}
+                            onChange={e => setRescheduleDate(e.target.value)}
+                            className="input-field text-sm w-full" style={{ paddingLeft: '1rem' }} />
+                          <div className="flex gap-2">
+                            <button onClick={() => handleReschedule(a._id)}
+                              className="text-xs font-medium px-3 py-1.5 rounded-xl"
+                              style={{ background: '#3B5BDB', color: '#fff' }}>Confirm Reschedule</button>
+                            <button onClick={() => setRescheduleFor(null)}
+                              className="text-xs font-medium px-3 py-1.5 rounded-xl"
+                              style={{ background: '#F3F4F6', color: '#6B7280' }}>Cancel</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Prescription */}
+                      {a.status === 'completed' && (
+                        <button
+                          onClick={async () => {
+                            if (rxOpen === a._id) { setRxOpen(null); return }
+                            setRxOpen(a._id)
+                            if (rxCache[a._id] === undefined) {
+                              try {
+                                const rx = await getAppointmentPrescription(a._id)
+                                setRxCache(prev => ({ ...prev, [a._id]: rx }))
+                              } catch { setRxCache(prev => ({ ...prev, [a._id]: null })) }
+                            }
+                          }}
+                          className="text-xs font-medium px-3 py-1.5 rounded-xl mb-2"
+                          style={{ background: '#FEF3C7', color: '#92400E' }}>
+                          💊 View Prescription
                         </button>
+                      )}
+                      {rxOpen === a._id && (
+                        <div className="mb-3 p-4 rounded-2xl" style={{ background: '#FFFBEB' }}>
+                          {rxCache[a._id] === undefined && <p className="text-xs" style={{ color: '#9CA3AF' }}>Loading…</p>}
+                          {rxCache[a._id] === null && <p className="text-xs" style={{ color: '#9CA3AF' }}>No prescription issued for this appointment.</p>}
+                          {rxCache[a._id] && (() => {
+                            const rx = rxCache[a._id]
+                            return (
+                              <>
+                                <div className="flex justify-between items-start mb-3">
+                                  <div>
+                                    <p className="font-bold text-sm" style={{ color: '#92400E' }}>Prescription</p>
+                                    <p className="text-xs" style={{ color: '#6B7280' }}>Dr. {rx.doctor?.name} · {new Date(rx.createdAt).toLocaleDateString()}</p>
+                                  </div>
+                                  <button onClick={() => window.print()}
+                                    className="text-xs font-medium px-2 py-1 rounded-lg"
+                                    style={{ background: '#FDE68A', color: '#92400E' }}>🖨 Print</button>
+                                </div>
+                                <div className="space-y-3">
+                                  {rx.medications.map((m: any, i: number) => (
+                                    <div key={i} className="bg-white rounded-xl p-3 text-xs space-y-0.5">
+                                      <p className="font-bold" style={{ color: '#1B1B2F' }}>{i + 1}. {m.name}</p>
+                                      <p style={{ color: '#6B7280' }}>Dosage: <span style={{ color: '#1B1B2F' }}>{m.dosage}</span></p>
+                                      <p style={{ color: '#6B7280' }}>Frequency: <span style={{ color: '#1B1B2F' }}>{m.frequency}</span></p>
+                                      <p style={{ color: '#6B7280' }}>Duration: <span style={{ color: '#1B1B2F' }}>{m.duration}</span></p>
+                                      {m.instructions && <p style={{ color: '#6B7280' }}>Instructions: <span style={{ color: '#1B1B2F' }}>{m.instructions}</span></p>}
+                                    </div>
+                                  ))}
+                                </div>
+                                {rx.notes && <p className="mt-3 text-xs p-2 rounded-lg" style={{ background: '#FDE68A', color: '#92400E' }}>Note: {rx.notes}</p>}
+                              </>
+                            )
+                          })()}
+                        </div>
                       )}
 
                       {/* Rating for completed appointments */}
@@ -620,6 +1094,45 @@ export default function PatientDashboard() {
               style={{ background: '#D1FAE5', color: '#065F46' }}>{ratingMsg}</div>
           )}
 
+          {/* Medical History */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3 mb-4">
+            <h3 className="font-semibold text-sm" style={{ color: '#1B1B2F' }}>Medical History</h3>
+            <p className="text-xs" style={{ color: '#9CA3AF' }}>This information is shared with your doctor before consultations.</p>
+            {medMsg && (
+              <div className="p-3 rounded-xl text-sm"
+                style={{ background: medMsg.includes('saved') ? '#D1FAE5' : '#FEE2E2', color: medMsg.includes('saved') ? '#065F46' : '#DC2626' }}>
+                {medMsg}
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: '#6B7280' }}>Blood Type</label>
+              <select value={medForm.bloodType} onChange={e => setMedForm(f => ({ ...f, bloodType: e.target.value }))}
+                className="input-field text-sm" style={{ paddingLeft: '1rem' }}>
+                {['Unknown','A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bt => (
+                  <option key={bt} value={bt}>{bt}</option>
+                ))}
+              </select>
+            </div>
+            {[
+              { key: 'allergies', label: 'Allergies', placeholder: 'e.g. Penicillin, Peanuts' },
+              { key: 'chronicConditions', label: 'Chronic Conditions', placeholder: 'e.g. Diabetes, Hypertension' },
+              { key: 'currentMedications', label: 'Current Medications', placeholder: 'e.g. Metformin 500mg daily' },
+              { key: 'emergencyContactName', label: 'Emergency Contact Name', placeholder: 'Full name' },
+              { key: 'emergencyContactPhone', label: 'Emergency Contact Phone', placeholder: '+265 xxx xxx xxx' },
+            ].map(({ key, label, placeholder }) => (
+              <div key={key}>
+                <label className="block text-xs font-medium mb-1" style={{ color: '#6B7280' }}>{label}</label>
+                <input type="text" placeholder={placeholder}
+                  value={(medForm as any)[key]}
+                  onChange={e => setMedForm(f => ({ ...f, [key]: e.target.value }))}
+                  className="input-field text-sm" style={{ paddingLeft: '1rem' }} />
+              </div>
+            ))}
+            <button onClick={handleSaveMedical} disabled={medLoading} className="btn-primary">
+              {medLoading ? 'Saving…' : 'Save Medical Profile'}
+            </button>
+          </div>
+
           {/* Change password */}
           <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3 mb-4">
             <h3 className="font-semibold text-sm" style={{ color: '#1B1B2F' }}>Change Password</h3>
@@ -648,7 +1161,14 @@ export default function PatientDashboard() {
         </div>
       )}
 
-      <BottomNav active={tab === 'appointments' || showBooking ? 'appointments' : tab} onTab={(t) => { setShowBooking(false); setShowAI(false); setTab(t) }} />
+      <BottomNav
+        active={tab === 'appointments' || showBooking ? 'appointments' : tab}
+        onTab={(t) => { setShowBooking(false); setShowAI(false); setShowHealth(false); setTab(t) }}
+        badges={{
+          appointments: appointments.filter(a => a.status === 'pending').length,
+          messages: appointments.filter(a => a.status === 'confirmed').length,
+        }}
+      />
     </div>
   )
 }

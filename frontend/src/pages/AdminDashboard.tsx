@@ -1,25 +1,44 @@
 import { useEffect, useState } from 'react'
-import { Users, Calendar, Trash2, ChevronDown } from 'lucide-react'
+import { Trash2, CheckCircle, XCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { adminGetUsers, adminDeleteUser, adminGetAppointments, adminUpdateAppointmentStatus } from '../api'
+import { adminGetUsers, adminDeleteUser, adminGetAppointments, adminUpdateAppointmentStatus, adminGetDoctors, adminVerifyDoctor, adminRejectDoctor } from '../api'
 
 type User = { _id: string; name: string; email: string; role: string }
 type Appointment = { _id: string; patient: any; doctor: any; date: string; reason: string; status: string }
-type Tab = 'users' | 'appointments'
+type DoctorProfile = { _id: string; user: { _id: string; name: string; email: string }; specialization: string; hospital: string; consultationFee: number; bio: string; verified: boolean; createdAt: string }
+type Tab = 'users' | 'appointments' | 'doctors' | 'analytics'
 
 export default function AdminDashboard() {
   const { logout } = useAuth()
   const [tab, setTab] = useState<Tab>('users')
   const [users, setUsers] = useState<User[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [doctorProfiles, setDoctorProfiles] = useState<DoctorProfile[]>([])
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
     adminGetUsers().then(setUsers)
     adminGetAppointments().then(setAppointments)
+    adminGetDoctors().then(setDoctorProfiles)
   }, [])
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 3000) }
+
+  const handleVerify = async (id: string) => {
+    try {
+      await adminVerifyDoctor(id)
+      setDoctorProfiles(prev => prev.map(d => d._id === id ? { ...d, verified: true } : d))
+      flash('Doctor verified.')
+    } catch (err: any) { flash(err.message) }
+  }
+
+  const handleReject = async (id: string) => {
+    try {
+      await adminRejectDoctor(id)
+      setDoctorProfiles(prev => prev.map(d => d._id === id ? { ...d, verified: false } : d))
+      flash('Doctor rejected.')
+    } catch (err: any) { flash(err.message) }
+  }
 
   const handleDeleteUser = async (id: string) => {
     if (!confirm('Delete this user?')) return
@@ -51,8 +70,7 @@ export default function AdminDashboard() {
     completed: { bg: '#DBEAFE', text: '#1E40AF' },
   }[s] ?? { bg: '#F3F4F6', text: '#374151' })
 
-  const doctors = users.filter(u => u.role === 'doctor').length
-  const patients = users.filter(u => u.role === 'patient').length
+  const pendingDoctors = doctorProfiles.filter(d => !d.verified).length
 
   return (
     <div className="app-shell" style={{ background: '#F8F9FE' }}>
@@ -70,10 +88,10 @@ export default function AdminDashboard() {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: 'Users', value: users.length, icon: Users, color: '#3B5BDB' },
-            { label: 'Doctors', value: doctors, icon: Users, color: '#7C3AED' },
-            { label: 'Appointments', value: appointments.length, icon: Calendar, color: '#10B981' },
-          ].map(({ label, value, icon: Icon, color }) => (
+            { label: 'Users', value: users.length, color: '#3B5BDB' },
+            { label: 'Pending', value: pendingDoctors, color: '#D97706' },
+            { label: 'Appointments', value: appointments.length, color: '#10B981' },
+          ].map(({ label, value, color }) => (
             <div key={label} className="bg-white rounded-2xl p-3 shadow-sm text-center">
               <p className="text-xl font-bold" style={{ color }}>{value}</p>
               <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>{label}</p>
@@ -88,11 +106,15 @@ export default function AdminDashboard() {
 
       {/* Tabs */}
       <div className="flex px-6 mt-4 gap-2">
-        {(['users', 'appointments'] as Tab[]).map(t => (
+        {(['users', 'doctors', 'appointments', 'analytics'] as Tab[]).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className="px-4 py-2 rounded-xl text-sm font-medium capitalize transition-all"
+            className="relative px-4 py-2 rounded-xl text-sm font-medium capitalize transition-all"
             style={{ background: tab === t ? '#3B5BDB' : '#fff', color: tab === t ? '#fff' : '#6B7280' }}>
             {t}
+            {t === 'doctors' && pendingDoctors > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-xs flex items-center justify-center text-white"
+                style={{ background: '#EF4444', fontSize: 10 }}>{pendingDoctors}</span>
+            )}
           </button>
         ))}
       </div>
@@ -126,6 +148,185 @@ export default function AdminDashboard() {
           {users.length === 0 && <p className="text-sm text-center py-8" style={{ color: '#9CA3AF' }}>No users found.</p>}
         </div>
       )}
+
+      {/* Doctors */}
+      {tab === 'doctors' && (
+        <div className="px-6 mt-4 pb-8">
+          {doctorProfiles.length === 0 && (
+            <p className="text-sm text-center py-8" style={{ color: '#9CA3AF' }}>No doctor profiles yet.</p>
+          )}
+
+          {/* Pending section */}
+          {doctorProfiles.filter(d => !d.verified).length > 0 && (
+            <>
+              <p className="text-xs font-bold tracking-widest mb-3" style={{ color: '#D97706' }}>PENDING VERIFICATION</p>
+              <div className="space-y-3 mb-6">
+                {doctorProfiles.filter(d => !d.verified).map(d => (
+                  <div key={d._id} className="bg-white rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white flex-shrink-0"
+                        style={{ background: '#7C3AED' }}>
+                        {d.user?.name?.charAt(0)?.toUpperCase() ?? 'D'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm truncate" style={{ color: '#1B1B2F' }}>Dr. {d.user?.name}</p>
+                        <p className="text-xs truncate" style={{ color: '#6B7280' }}>{d.user?.email}</p>
+                      </div>
+                    </div>
+                    <div className="text-xs space-y-0.5 mb-3" style={{ color: '#6B7280' }}>
+                      <p><span className="font-medium" style={{ color: '#1B1B2F' }}>Specialization:</span> {d.specialization}</p>
+                      <p><span className="font-medium" style={{ color: '#1B1B2F' }}>Hospital:</span> {d.hospital}</p>
+                      <p><span className="font-medium" style={{ color: '#1B1B2F' }}>Fee:</span> ${d.consultationFee}</p>
+                      {d.bio && <p><span className="font-medium" style={{ color: '#1B1B2F' }}>Bio:</span> {d.bio}</p>}
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleVerify(d._id)}
+                        className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-xl"
+                        style={{ background: '#D1FAE5', color: '#065F46' }}>
+                        <CheckCircle size={13} /> Approve
+                      </button>
+                      <button onClick={() => handleReject(d._id)}
+                        className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-xl"
+                        style={{ background: '#FEE2E2', color: '#DC2626' }}>
+                        <XCircle size={13} /> Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Verified section */}
+          {doctorProfiles.filter(d => d.verified).length > 0 && (
+            <>
+              <p className="text-xs font-bold tracking-widest mb-3" style={{ color: '#10B981' }}>VERIFIED</p>
+              <div className="space-y-3">
+                {doctorProfiles.filter(d => d.verified).map(d => (
+                  <div key={d._id} className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white flex-shrink-0"
+                      style={{ background: '#10B981' }}>
+                      {d.user?.name?.charAt(0)?.toUpperCase() ?? 'D'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate" style={{ color: '#1B1B2F' }}>Dr. {d.user?.name}</p>
+                      <p className="text-xs truncate" style={{ color: '#6B7280' }}>{d.specialization} · {d.hospital}</p>
+                    </div>
+                    <button onClick={() => handleReject(d._id)}
+                      className="flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-xl"
+                      style={{ background: '#FEE2E2', color: '#DC2626' }}>
+                      Revoke
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Analytics */}
+      {tab === 'analytics' && (() => {
+        const statusCounts = { pending: 0, confirmed: 0, completed: 0, cancelled: 0 }
+        appointments.forEach(a => { if (a.status in statusCounts) (statusCounts as any)[a.status]++ })
+
+        const doctorAppts: Record<string, { name: string; count: number; fee: number }> = {}
+        appointments.forEach(a => {
+          const did = a.doctor?._id ?? 'unknown'
+          if (!doctorAppts[did]) {
+            const dp = doctorProfiles.find(d => d.user?._id === did)
+            doctorAppts[did] = { name: a.doctor?.name ?? 'Unknown', count: 0, fee: dp?.consultationFee ?? 0 }
+          }
+          doctorAppts[did].count++
+        })
+        const topDoctors = Object.values(doctorAppts).sort((a, b) => b.count - a.count).slice(0, 5)
+
+        const totalRevenue = appointments
+          .filter(a => a.status === 'completed')
+          .reduce((sum, a) => {
+            const dp = doctorProfiles.find(d => d.user?._id === a.doctor?._id)
+            return sum + (dp?.consultationFee ?? 0)
+          }, 0)
+
+        const roleBreakdown = { patient: 0, doctor: 0, admin: 0 }
+        users.forEach(u => { if (u.role in roleBreakdown) (roleBreakdown as any)[u.role]++ })
+
+        const maxAppts = Math.max(1, ...topDoctors.map(d => d.count))
+        const statusEntries = Object.entries(statusCounts) as [string, number][]
+        const maxStatus = Math.max(1, ...statusEntries.map(([, v]) => v))
+
+        const barColors: Record<string, string> = {
+          pending: '#F59E0B', confirmed: '#10B981', completed: '#3B5BDB', cancelled: '#EF4444'
+        }
+
+        return (
+          <div className="px-6 mt-4 pb-8 space-y-5">
+            {/* Revenue */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <p className="text-xs font-bold tracking-widest mb-3" style={{ color: '#6B7280' }}>REVENUE (COMPLETED)</p>
+              <p className="text-3xl font-bold" style={{ color: '#3B5BDB' }}>${totalRevenue.toLocaleString()}</p>
+              <p className="text-xs mt-1" style={{ color: '#9CA3AF' }}>From {statusCounts.completed} completed appointments</p>
+            </div>
+
+            {/* Appointments by status */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <p className="text-xs font-bold tracking-widest mb-4" style={{ color: '#6B7280' }}>APPOINTMENTS BY STATUS</p>
+              <div className="space-y-3">
+                {statusEntries.map(([status, count]) => (
+                  <div key={status}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="capitalize font-medium" style={{ color: '#374151' }}>{status}</span>
+                      <span style={{ color: '#6B7280' }}>{count}</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full" style={{ background: '#F3F4F6' }}>
+                      <div className="h-2 rounded-full transition-all"
+                        style={{ width: `${(count / maxStatus) * 100}%`, background: barColors[status] ?? '#9CA3AF' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Top doctors */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <p className="text-xs font-bold tracking-widest mb-4" style={{ color: '#6B7280' }}>TOP DOCTORS BY APPOINTMENTS</p>
+              {topDoctors.length === 0
+                ? <p className="text-xs text-center py-4" style={{ color: '#9CA3AF' }}>No data yet.</p>
+                : <div className="space-y-3">
+                    {topDoctors.map((d, i) => (
+                      <div key={i}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="font-medium truncate max-w-[180px]" style={{ color: '#374151' }}>Dr. {d.name}</span>
+                          <span style={{ color: '#6B7280' }}>{d.count} appts</span>
+                        </div>
+                        <div className="w-full h-2 rounded-full" style={{ background: '#F3F4F6' }}>
+                          <div className="h-2 rounded-full transition-all"
+                            style={{ width: `${(d.count / maxAppts) * 100}%`, background: '#7C3AED' }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+              }
+            </div>
+
+            {/* User roles */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <p className="text-xs font-bold tracking-widest mb-4" style={{ color: '#6B7280' }}>USER BREAKDOWN</p>
+              <div className="flex gap-3">
+                {(Object.entries(roleBreakdown) as [string, number][]).map(([role, count]) => {
+                  const rc = roleColor(role)
+                  return (
+                    <div key={role} className="flex-1 rounded-2xl p-3 text-center" style={{ background: rc.bg }}>
+                      <p className="text-xl font-bold" style={{ color: rc.text }}>{count}</p>
+                      <p className="text-xs capitalize mt-0.5" style={{ color: rc.text }}>{role}s</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Appointments */}
       {tab === 'appointments' && (

@@ -22,6 +22,10 @@ const doctorSchema = new mongoose.Schema({
   bio: {
     type: String
   },
+  verified: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now
