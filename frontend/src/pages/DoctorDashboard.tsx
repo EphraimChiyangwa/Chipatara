@@ -265,18 +265,32 @@ export default function DoctorDashboard() {
       {/* ── HOME ── */}
       {tab === 'home' && (
         <div className="pb-24">
-          <div className="px-6 pt-12 pb-6" style={{ background: '#EBF0FF' }}>
-            <div className="flex justify-between items-center">
+          <div className="header-gradient px-6 pt-12 pb-8">
+            <div className="flex justify-between items-center mb-4" style={{ position: 'relative', zIndex: 1 }}>
               <div>
-                <p className="text-sm" style={{ color: '#6B7280' }}>Welcome back,</p>
-                <h2 className="text-xl font-bold" style={{ color: '#1B1B2F' }}>
-                  Dr. {user?.name ?? '—'} 👋
-                </h2>
+                <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                  {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'} 👋
+                </p>
+                <h2 className="text-2xl font-bold text-white mt-0.5">Dr. {user?.name?.split(' ')[0] ?? '—'}</h2>
               </div>
-              <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white"
-                style={{ background: '#3B5BDB' }}>
+              <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-lg"
+                style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '2px solid rgba(255,255,255,0.4)' }}>
                 {user?.name?.charAt(0)?.toUpperCase() ?? 'D'}
               </div>
+            </div>
+            <div className="flex gap-3" style={{ position: 'relative', zIndex: 1 }}>
+              {[
+                { label: 'Pending', value: appointments.filter(a => a.status === 'pending').length, icon: '⏳' },
+                { label: 'Confirmed', value: appointments.filter(a => a.status === 'confirmed').length, icon: '✅' },
+                { label: 'Completed', value: appointments.filter(a => a.status === 'completed').length, icon: '🏥' },
+              ].map(s => (
+                <div key={s.label} className="flex-1 rounded-2xl px-3 py-2 text-center"
+                  style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
+                  <p className="text-sm">{s.icon}</p>
+                  <p className="text-base font-bold text-white">{s.value}</p>
+                  <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.7)' }}>{s.label}</p>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -363,11 +377,12 @@ export default function DoctorDashboard() {
       {/* ── APPOINTMENTS ── */}
       {tab === 'appointments' && (
         <div className="pb-24">
-          <div className="px-6 pt-12 pb-4" style={{ background: '#EBF0FF' }}>
-            <h2 className="text-xl font-bold" style={{ color: '#1B1B2F' }}>Appointments</h2>
+          <div className="header-gradient px-6 pt-12 pb-6">
+            <h2 className="text-2xl font-bold text-white" style={{ position: 'relative', zIndex: 1 }}>Appointments</h2>
+            <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.7)', position: 'relative', zIndex: 1 }}>Manage your patient schedule</p>
           </div>
           {apptMsg && (
-            <div className="mx-6 mt-3 p-3 rounded-xl text-sm text-center" style={{ background: '#EBF0FF', color: '#3B5BDB' }}>{apptMsg}</div>
+            <div className="mx-6 mt-3 p-3 rounded-2xl text-sm text-center" style={{ background: '#EBF0FF', color: '#3B5BDB' }}>{apptMsg}</div>
           )}
           <div className="px-6 mt-4 space-y-3">
             {appointments.length === 0 && (
@@ -375,17 +390,29 @@ export default function DoctorDashboard() {
             )}
             {appointments.map(a => {
               const sc = statusColor(a.status)
+              const statusBorder: Record<string, string> = {
+                pending: '#F59E0B', confirmed: '#10B981', completed: '#3B5BDB', cancelled: '#EF4444'
+              }
+              const apptDate = new Date(a.date)
               return (
-                <div key={a._id} className="bg-white rounded-2xl p-4 shadow-sm">
+                <div key={a._id} className="bg-white rounded-2xl overflow-hidden fade-up"
+                  style={{ boxShadow: '0 2px 12px rgba(27,27,47,0.07)', borderLeft: `4px solid ${statusBorder[a.status] ?? '#E5E7EB'}` }}>
+                  <div className="p-4">
                   <div className="flex justify-between items-start mb-1">
-                    <p className="font-semibold text-sm" style={{ color: '#1B1B2F' }}>{a.reason}</p>
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-full"
+                    <p className="font-bold text-sm flex-1 mr-2" style={{ color: '#1B1B2F' }}>{a.reason}</p>
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full capitalize flex-shrink-0"
                       style={{ background: sc.bg, color: sc.text }}>{a.status}</span>
                   </div>
-                  <p className="text-xs font-medium mb-1" style={{ color: '#3B5BDB' }}>{patientName(a)}</p>
-                  <div className="flex items-center gap-1 mb-3">
+                  <p className="text-xs font-semibold mb-1" style={{ color: '#3B5BDB' }}>{patientName(a)}</p>
+                  <div className="flex items-center gap-1 mb-3 px-2 py-1.5 rounded-xl" style={{ background: '#F8F9FE' }}>
                     <Clock size={12} style={{ color: '#9CA3AF' }} />
-                    <span className="text-xs" style={{ color: '#6B7280' }}>{new Date(a.date).toLocaleString()}</span>
+                    <span className="text-xs font-medium" style={{ color: '#374151' }}>
+                      {apptDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </span>
+                    <span className="text-xs" style={{ color: '#9CA3AF' }}>·</span>
+                    <span className="text-xs font-medium" style={{ color: '#374151' }}>
+                      {apptDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
 
                   {/* Existing notes */}
@@ -569,6 +596,7 @@ export default function DoctorDashboard() {
                       </div>
                     )
                   })()}
+                  </div>
                 </div>
               )
             })}
@@ -579,8 +607,9 @@ export default function DoctorDashboard() {
       {/* ── AVAILABILITY (messages tab) ── */}
       {tab === 'messages' && (
         <div className="pb-24">
-          <div className="px-6 pt-12 pb-4" style={{ background: '#EBF0FF' }}>
-            <h2 className="text-xl font-bold" style={{ color: '#1B1B2F' }}>Availability</h2>
+          <div className="header-gradient px-6 pt-12 pb-6">
+            <h2 className="text-2xl font-bold text-white" style={{ position: 'relative', zIndex: 1 }}>Availability</h2>
+            <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.7)', position: 'relative', zIndex: 1 }}>Set your working hours</p>
           </div>
           <div className="px-6 mt-4">
             {slotMsg && (

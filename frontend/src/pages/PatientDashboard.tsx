@@ -168,6 +168,8 @@ export default function PatientDashboard() {
     })
   }
 
+  const doctorSearchRef = useRef<HTMLDivElement>(null)
+
   const selectDoctor = async (doc: Doctor) => {
     setSelectedDoctor(doc)
     const slots = await getAvailability(doc._id)
@@ -268,20 +270,34 @@ export default function PatientDashboard() {
       {/* ── HOME TAB ── */}
       {tab === 'home' && !showAI && (
         <div className="pb-24">
-          {/* Header */}
-          <div className="px-6 pt-12 pb-6" style={{ background: '#EBF0FF' }}>
-            <div className="flex justify-between items-center mb-1">
+          {/* Hero Header */}
+          <div className="header-gradient px-6 pt-12 pb-8">
+            <div className="flex justify-between items-center mb-4" style={{ position: 'relative', zIndex: 1 }}>
               <div>
-                <p className="text-sm" style={{ color: '#6B7280' }}>Good morning,</p>
-                <h2 className="text-xl font-bold" style={{ color: '#1B1B2F' }}>{user?.name ?? 'Patient'} 👋</h2>
+                <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                  {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'} 👋
+                </p>
+                <h2 className="text-2xl font-bold text-white mt-0.5">{user?.name?.split(' ')[0] ?? 'Patient'}</h2>
               </div>
-              <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white" style={{ background: '#3B5BDB' }}>
+              <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-lg"
+                style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '2px solid rgba(255,255,255,0.4)' }}>
                 {user?.name?.charAt(0)?.toUpperCase() ?? 'P'}
               </div>
             </div>
-            <div className="flex items-center gap-2 mt-3">
-              <MapPin size={14} style={{ color: '#3B5BDB' }} />
-              <span className="text-xs" style={{ color: '#6B7280' }}>Chipatara Telemedicine</span>
+            {/* Quick stats row */}
+            <div className="flex gap-3 mt-1" style={{ position: 'relative', zIndex: 1 }}>
+              {[
+                { label: 'Total', value: appointments.length, icon: '📋' },
+                { label: 'Upcoming', value: appointments.filter(a => a.status === 'confirmed').length, icon: '📅' },
+                { label: 'Completed', value: appointments.filter(a => a.status === 'completed').length, icon: '✅' },
+              ].map(s => (
+                <div key={s.label} className="flex-1 rounded-2xl px-3 py-2 text-center"
+                  style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
+                  <p className="text-sm">{s.icon}</p>
+                  <p className="text-base font-bold text-white">{s.value}</p>
+                  <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.7)' }}>{s.label}</p>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -291,7 +307,10 @@ export default function PatientDashboard() {
             <p className="text-sm mb-4" style={{ color: '#6B7280' }}>This would help us connect you with the best available licensed Doctor for that location on our platform.</p>
 
             <div className="grid grid-cols-2 gap-3 mb-6">
-              <button onClick={() => { setTab('appointments'); setShowBooking(false) }}
+              <button onClick={() => {
+                  setTab('home'); setShowBooking(false); setSelectedDoctor(null)
+                  setTimeout(() => doctorSearchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+                }}
                 className="rounded-2xl p-4 text-left" style={{ background: '#FFEBE8' }}>
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: '#FECACA' }}>
                   <span className="text-lg">✚</span>
@@ -344,7 +363,7 @@ export default function PatientDashboard() {
             </button>
 
             {/* Search + Filter */}
-            <h3 className="font-semibold mb-3" style={{ color: '#1B1B2F' }}>Available Doctors</h3>
+            <h3 ref={doctorSearchRef} className="font-semibold mb-3" style={{ color: '#1B1B2F' }}>Available Doctors</h3>
             <div className="space-y-2 mb-4">
               <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#aab0c0' }} />
@@ -398,30 +417,53 @@ export default function PatientDashboard() {
               )}
             </div>
             <div className="space-y-3">
-              {doctors.map(doc => (
-                <button key={doc._id} onClick={() => selectDoctor(doc)}
-                  className="w-full bg-white rounded-2xl p-4 flex items-center gap-3 shadow-sm text-left">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white flex-shrink-0"
-                    style={{ background: '#3B5BDB' }}>
-                    {doc.name.charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: '#EBF0FF', color: '#3B5BDB' }}>
-                        Video Consultation
-                      </span>
+              {doctors.map((doc, i) => {
+                const avatarColors = ['#3B5BDB','#7C3AED','#0891B2','#059669','#DC2626','#D97706']
+                const avatarBg = avatarColors[doc.name.charCodeAt(0) % avatarColors.length]
+                const rating = (doc as any).averageRating ?? 0
+                const reviewCount = (doc as any).reviewCount ?? 0
+                return (
+                  <button key={doc._id} onClick={() => selectDoctor(doc)}
+                    className="w-full rounded-2xl p-4 flex items-center gap-3 text-left fade-up"
+                    style={{ background: '#fff', boxShadow: '0 2px 12px rgba(27,27,47,0.07)', animationDelay: `${i * 40}ms` }}>
+                    <div className="relative flex-shrink-0">
+                      <div className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-white text-xl"
+                        style={{ background: `linear-gradient(135deg, ${avatarBg} 0%, ${avatarBg}bb 100%)` }}>
+                        {doc.name.charAt(0)}
+                      </div>
+                      <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white"
+                        style={{ background: '#10B981' }} />
                     </div>
-                    <p className="font-semibold text-sm truncate" style={{ color: '#1B1B2F' }}>Dr. {doc.name}</p>
-                    <p className="text-xs truncate" style={{ color: '#6B7280' }}>
-                      {doc.profile ? `${doc.profile.specialization} · ${doc.profile.hospital}` : 'General Practitioner'}
-                    </p>
-                    {doc.profile?.consultationFee && (
-                      <p className="text-xs font-medium mt-0.5" style={{ color: '#3B5BDB' }}>Fee: ${doc.profile.consultationFee}</p>
-                    )}
-                  </div>
-                  <ChevronRight size={16} style={{ color: '#9CA3AF' }} />
-                </button>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm" style={{ color: '#1B1B2F' }}>Dr. {doc.name}</p>
+                      <p className="text-xs truncate mt-0.5" style={{ color: '#6B7280' }}>
+                        {doc.profile?.specialization ?? 'General Practitioner'}
+                      </p>
+                      <p className="text-xs truncate" style={{ color: '#9CA3AF' }}>{doc.profile?.hospital ?? ''}</p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        {doc.profile?.consultationFee ? (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                            style={{ background: '#EBF0FF', color: '#3B5BDB' }}>
+                            ${doc.profile.consultationFee}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                            style={{ background: '#D1FAE5', color: '#059669' }}>Free</span>
+                        )}
+                        {rating > 0 && (
+                          <span className="text-xs flex items-center gap-0.5" style={{ color: '#F59E0B' }}>
+                            ★ <span style={{ color: '#6B7280' }}>{rating.toFixed(1)} ({reviewCount})</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
+                      style={{ background: '#EBF0FF' }}>
+                      <ChevronRight size={14} style={{ color: '#3B5BDB' }} />
+                    </div>
+                  </button>
+                )
+              })}
               {doctors.length === 0 && (
                 <p className="text-sm text-center py-8" style={{ color: '#9CA3AF' }}>No doctors available yet.</p>
               )}
@@ -748,28 +790,50 @@ export default function PatientDashboard() {
       {/* ── APPOINTMENTS TAB ── */}
       {tab === 'appointments' && !showBooking && (
         <div className="pb-24">
-          <div className="px-6 pt-12 pb-4" style={{ background: '#EBF0FF' }}>
-            <h2 className="text-xl font-bold" style={{ color: '#1B1B2F' }}>Appointments</h2>
+          <div className="px-6 pt-12 pb-6 header-gradient">
+            <h2 className="text-2xl font-bold text-white" style={{ position: 'relative', zIndex: 1 }}>My Appointments</h2>
+            <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.7)', position: 'relative', zIndex: 1 }}>Track and manage your consultations</p>
           </div>
           <div className="px-6 mt-4">
-            {apptMsg && <p className="text-sm mb-3" style={{ color: '#3B5BDB' }}>{apptMsg}</p>}
+            {apptMsg && (
+              <div className="mb-3 p-3 rounded-2xl text-sm font-medium" style={{ background: '#EBF0FF', color: '#3B5BDB' }}>{apptMsg}</div>
+            )}
             {appointments.length === 0
               ? <p className="text-sm text-center py-12" style={{ color: '#9CA3AF' }}>No appointments yet. Go to Home to book one.</p>
               : appointments.map(a => {
                   const sc = statusColor(a.status)
+                  const statusBorder: Record<string, string> = {
+                    pending: '#F59E0B', confirmed: '#10B981', completed: '#3B5BDB', cancelled: '#EF4444'
+                  }
+                  const apptDate = new Date(a.date)
                   return (
-                    <div key={a._id} className="bg-white rounded-2xl p-4 mb-3 shadow-sm">
-                      <div className="flex justify-between items-start mb-2">
-                        <p className="font-semibold text-sm" style={{ color: '#1B1B2F' }}>{a.reason}</p>
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: sc.bg, color: sc.text }}>{a.status}</span>
-                      </div>
-                      <p className="text-xs font-medium mb-1" style={{ color: '#3B5BDB' }}>
-                        Dr. {typeof a.doctor === 'object' ? a.doctor.name : a.doctor}
-                      </p>
-                      <div className="flex items-center gap-1 mb-3">
-                        <Clock size={13} style={{ color: '#9CA3AF' }} />
-                        <span className="text-xs" style={{ color: '#6B7280' }}>{new Date(a.date).toLocaleString()}</span>
-                      </div>
+                    <div key={a._id} className="bg-white rounded-2xl mb-3 overflow-hidden fade-up"
+                      style={{ boxShadow: '0 2px 12px rgba(27,27,47,0.07)', borderLeft: `4px solid ${statusBorder[a.status] ?? '#E5E7EB'}` }}>
+                      <div className="p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="font-bold text-sm flex-1 mr-2" style={{ color: '#1B1B2F' }}>{a.reason}</p>
+                          <span className="text-xs font-semibold px-2.5 py-1 rounded-full capitalize flex-shrink-0"
+                            style={{ background: sc.bg, color: sc.text }}>{a.status}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                            style={{ background: '#3B5BDB' }}>
+                            {(typeof a.doctor === 'object' ? a.doctor.name : '?').charAt(0)}
+                          </div>
+                          <p className="text-xs font-semibold" style={{ color: '#3B5BDB' }}>
+                            Dr. {typeof a.doctor === 'object' ? a.doctor.name : a.doctor}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 mb-3 px-2 py-1.5 rounded-xl" style={{ background: '#F8F9FE' }}>
+                          <Clock size={12} style={{ color: '#9CA3AF' }} />
+                          <span className="text-xs font-medium" style={{ color: '#374151' }}>
+                            {apptDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          </span>
+                          <span className="text-xs" style={{ color: '#9CA3AF' }}>·</span>
+                          <span className="text-xs font-medium" style={{ color: '#374151' }}>
+                            {apptDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
                       {/* Join video call for confirmed appointments */}
                       {a.status === 'confirmed' && (
                         <a
@@ -1024,8 +1088,9 @@ export default function PatientDashboard() {
       {/* ── MESSAGES TAB: chat list ── */}
       {tab === 'messages' && !chatAppt && (
         <div className="pb-24">
-          <div className="px-6 pt-12 pb-4" style={{ background: '#EBF0FF' }}>
-            <h2 className="text-xl font-bold" style={{ color: '#1B1B2F' }}>Messages</h2>
+          <div className="px-6 pt-12 pb-6 header-gradient">
+            <h2 className="text-2xl font-bold text-white" style={{ position: 'relative', zIndex: 1 }}>Messages</h2>
+            <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.7)', position: 'relative', zIndex: 1 }}>Chat with your care team</p>
           </div>
           <div className="px-6 mt-4 space-y-3">
             {appointments.filter(a => ['confirmed', 'completed'].includes(a.status)).length === 0 && (
@@ -1072,16 +1137,17 @@ export default function PatientDashboard() {
 
       {/* ── PROFILE TAB ── */}
       {tab === 'profile' && (
-        <div className="px-6 pt-12 pb-24">
-          <h2 className="text-xl font-bold mb-6" style={{ color: '#1B1B2F' }}>Profile</h2>
-          <div className="flex flex-col items-center mb-6">
+        <div className="pb-24">
+          {/* Profile Hero */}
+          <div className="header-gradient px-6 pt-12 pb-8 flex flex-col items-center" style={{ position: 'relative' }}>
             <div className="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold text-white mb-3"
-              style={{ background: '#3B5BDB' }}>
+              style={{ background: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.5)', position: 'relative', zIndex: 1 }}>
               {user?.name?.charAt(0)?.toUpperCase() ?? 'P'}
             </div>
-            <p className="font-semibold" style={{ color: '#1B1B2F' }}>{user?.name ?? 'Patient'}</p>
-            <p className="text-sm" style={{ color: '#6B7280' }}>{user?.email ?? ''}</p>
+            <p className="font-bold text-lg text-white" style={{ position: 'relative', zIndex: 1 }}>{user?.name ?? 'Patient'}</p>
+            <p className="text-sm mt-0.5" style={{ color: 'rgba(255,255,255,0.7)', position: 'relative', zIndex: 1 }}>{user?.email ?? ''}</p>
           </div>
+          <div className="px-6 mt-4">
 
           {ratingMsg && (
             <div className="mb-4 p-3 rounded-xl text-sm text-center"
@@ -1152,6 +1218,7 @@ export default function PatientDashboard() {
           </div>
 
           <button onClick={logout} className="btn-outline" style={{ borderColor: '#E83F6F', color: '#E83F6F' }}>Sign Out</button>
+          </div>
         </div>
       )}
 
