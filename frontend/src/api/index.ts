@@ -50,6 +50,15 @@ export const saveMedicalProfile = (body: object) =>
 export const getPatientMedicalProfile = (patientId: string) =>
   request<any | null>(`/medical-profile/${patientId}`, { headers: headers(true) })
 
+// Payments
+export const initializePayment = (body: object) =>
+  request<{ authorization_url: string; reference: string; access_code: string; fee: number }>(
+    '/payments/initialize', { method: 'POST', headers: headers(true), body: JSON.stringify(body) }
+  )
+
+export const verifyPayment = (body: object) =>
+  request<any>('/payments/verify', { method: 'POST', headers: headers(true), body: JSON.stringify(body) })
+
 // Prescriptions
 export const savePrescription = (body: object) =>
   request('/prescriptions', { method: 'POST', headers: headers(true), body: JSON.stringify(body) })

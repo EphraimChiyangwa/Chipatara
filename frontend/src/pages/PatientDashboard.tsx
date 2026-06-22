@@ -3,7 +3,7 @@ import { io, Socket } from 'socket.io-client'
 import { MapPin, ChevronRight, X, Clock, Search, Brain, Star, Video, Activity, Trash2, Copy, Check } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import {
-  getDoctors, getSpecializations, getAvailability, bookAppointment,
+  getDoctors, getSpecializations, getAvailability,
   getPatientAppointments, cancelAppointment, checkSymptoms, type SymptomResult,
   rateAppointment, changePassword,
   registerDevice, getMyDevices, deleteDevice, getMyHealthMetrics,
@@ -1008,20 +1008,14 @@ export default function PatientDashboard() {
             doctor={selectedDoctor}
             date={date}
             reason={reason}
-            loading={false}
-            error={bookMsg}
             onBack={() => setShowPayment(false)}
-            onConfirm={async () => {
-              setBookMsg('')
-              try {
-                await bookAppointment({ doctorId: selectedDoctor._id, date, reason })
-                setShowPayment(false)
-                setShowBooking(false)
-                setDate('')
-                setReason('')
-                setTab('appointments')
-                getPatientAppointments().then(setAppointments)
-              } catch (err: any) { setBookMsg(err.message) }
+            onSuccess={() => {
+              setShowPayment(false)
+              setShowBooking(false)
+              setDate('')
+              setReason('')
+              setTab('appointments')
+              getPatientAppointments().then(setAppointments)
             }}
           />
         </div>

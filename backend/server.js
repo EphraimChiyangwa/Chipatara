@@ -33,6 +33,7 @@ const messageRoutes     = require('./routes/messageRoutes')
 const deviceRoutes         = require('./routes/deviceRoutes')
 const medicalProfileRoutes  = require('./routes/medicalProfileRoutes')
 const prescriptionRoutes    = require('./routes/prescriptionRoutes')
+const paymentRoutes         = require('./routes/paymentRoutes')
 
 // Attach socket.io instance to every request for routes that need real-time push
 app.use((req, _res, next) => { req.io = io; next() })
@@ -46,6 +47,7 @@ app.use('/api/messages',     messageRoutes)
 app.use('/api/devices',         deviceRoutes)
 app.use('/api/medical-profile',  medicalProfileRoutes)
 app.use('/api/prescriptions',    prescriptionRoutes)
+app.use('/api/payments',         paymentRoutes)
 
 // ── Socket.io chat ──────────────────────────────────────────────
 io.use((socket, next) => {

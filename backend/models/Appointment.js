@@ -49,6 +49,16 @@ const appointmentSchema = new mongoose.Schema({
   reminderSent: {
     type: Boolean,
     default: false
+  },
+
+  paystackReference: {
+    type: String,
+    default: null
+  },
+
+  paid: {
+    type: Boolean,
+    default: false
   }
 
 }, { timestamps: true });
