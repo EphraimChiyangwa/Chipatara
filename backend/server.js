@@ -34,6 +34,7 @@ const deviceRoutes         = require('./routes/deviceRoutes')
 const medicalProfileRoutes  = require('./routes/medicalProfileRoutes')
 const prescriptionRoutes    = require('./routes/prescriptionRoutes')
 const paymentRoutes         = require('./routes/paymentRoutes')
+const { checkSymptoms, recommendDoctor } = require('./utils/symptomChecker')
 
 // Attach socket.io instance to every request for routes that need real-time push
 app.use((req, _res, next) => { req.io = io; next() })
@@ -48,6 +49,27 @@ app.use('/api/devices',         deviceRoutes)
 app.use('/api/medical-profile',  medicalProfileRoutes)
 app.use('/api/prescriptions',    prescriptionRoutes)
 app.use('/api/payments',         paymentRoutes)
+
+// Rule-based AI symptom checker (no external API needed)
+app.post('/api/ai/symptoms', (req, res) => {
+  const { symptoms, patientHistory } = req.body
+  if (!symptoms?.trim()) return res.status(400).json({ message: 'symptoms is required' })
+  try {
+    res.json(checkSymptoms(symptoms, patientHistory))
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
+app.post('/api/ai/recommend-doctor', (req, res) => {
+  const { symptoms } = req.body
+  if (!symptoms?.trim()) return res.status(400).json({ message: 'symptoms is required' })
+  try {
+    res.json(recommendDoctor(symptoms))
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
 
 // ── Socket.io chat ──────────────────────────────────────────────
 io.use((socket, next) => {

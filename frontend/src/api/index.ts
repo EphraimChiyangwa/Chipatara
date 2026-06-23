@@ -1,8 +1,7 @@
 const BASE = 'http://localhost:5000/api'
-const AI_BASE = 'http://localhost:5001/api/ai'
 
 async function aiRequest<T>(path: string, body: object): Promise<T> {
-  const res = await fetch(`${AI_BASE}${path}`, {
+  const res = await fetch(`${BASE}/ai${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
