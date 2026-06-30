@@ -1,30 +1,21 @@
-const nodemailer = require("nodemailer");
+const { Resend } = require('resend')
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY)
+
+const FROM = 'Chipatara Health <onboarding@resend.dev>'
 
 const sendEmail = async ({ to, subject, html }) => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return;
+  if (!process.env.RESEND_API_KEY) return
   try {
-    await transporter.sendMail({
-      from: `"Chipatara Health" <${process.env.EMAIL_USER}>`,
-      to,
-      subject,
-      html,
-    });
+    await resend.emails.send({ from: FROM, to, subject, html })
   } catch (err) {
-    console.error("Email failed:", err.message);
+    console.error('Email failed:', err.message)
   }
-};
+}
 
 const emailTemplates = {
   appointmentBooked: (patientName, doctorName, date, reason) => ({
-    subject: "Appointment Booked — Chipatara",
+    subject: 'Appointment Booked — Chipatara',
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;">
         <div style="background:#3B5BDB;padding:24px 32px;border-radius:12px 12px 0 0;">
@@ -32,7 +23,7 @@ const emailTemplates = {
           <p style="color:#c7d4ff;margin:4px 0 0;font-size:13px;">Healthcare Without Distance</p>
         </div>
         <div style="background:#fff;padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
-          <h2 style="color:#1B1B2F;margin:0 0 16px;">Appointment Confirmed ✓</h2>
+          <h2 style="color:#1B1B2F;margin:0 0 16px;">Appointment Confirmed</h2>
           <p style="color:#6B7280;">Hi <strong>${patientName}</strong>,</p>
           <p style="color:#6B7280;">Your appointment has been booked successfully.</p>
           <div style="background:#EBF0FF;border-radius:10px;padding:16px;margin:20px 0;">
@@ -67,7 +58,7 @@ const emailTemplates = {
   }),
 
   appointmentReminder: (patientName, doctorName, date) => ({
-    subject: "Appointment Reminder — 1 Hour — Chipatara",
+    subject: 'Appointment Reminder — 1 Hour — Chipatara',
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;">
         <div style="background:#3B5BDB;padding:24px 32px;border-radius:12px 12px 0 0;">
@@ -75,9 +66,9 @@ const emailTemplates = {
           <p style="color:#c7d4ff;margin:4px 0 0;font-size:13px;">Healthcare Without Distance</p>
         </div>
         <div style="background:#fff;padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
-          <h2 style="color:#1B1B2F;margin:0 0 16px;">⏰ Appointment in 1 Hour</h2>
+          <h2 style="color:#1B1B2F;margin:0 0 16px;">Appointment in 1 Hour</h2>
           <p style="color:#6B7280;">Hi <strong>${patientName}</strong>,</p>
-          <p style="color:#6B7280;">This is a reminder that your appointment is coming up in approximately <strong>1 hour</strong>.</p>
+          <p style="color:#6B7280;">Your appointment is coming up in approximately <strong>1 hour</strong>.</p>
           <div style="background:#EBF0FF;border-radius:10px;padding:16px;margin:20px 0;">
             <p style="margin:0 0 8px;color:#1B1B2F;"><strong>Doctor:</strong> Dr. ${doctorName}</p>
             <p style="margin:0;color:#1B1B2F;"><strong>Time:</strong> ${new Date(date).toLocaleString()}</p>
@@ -88,7 +79,7 @@ const emailTemplates = {
   }),
 
   passwordReset: (name, resetLink) => ({
-    subject: "Reset Your Password — Chipatara",
+    subject: 'Reset Your Password — Chipatara',
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;">
         <div style="background:#3B5BDB;padding:24px 32px;border-radius:12px 12px 0 0;">
@@ -104,6 +95,6 @@ const emailTemplates = {
         </div>
       </div>`,
   }),
-};
+}
 
-module.exports = { sendEmail, emailTemplates };
+module.exports = { sendEmail, emailTemplates }

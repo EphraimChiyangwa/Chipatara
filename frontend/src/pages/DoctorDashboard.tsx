@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { io, Socket } from 'socket.io-client'
-import { Clock, Trash2, CheckCircle, XCircle, ChevronRight, Star, FileText, MessageCircle, Video, Activity, X } from 'lucide-react'
+import { Clock, Trash2, CheckCircle, XCircle, ChevronRight, Star, FileText, MessageCircle, Video, Activity, X, Stethoscope, Pill } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import {
   getDoctorAppointments, updateAppointmentStatus,
@@ -264,31 +264,36 @@ export default function DoctorDashboard() {
 
       {/* ── HOME ── */}
       {tab === 'home' && (
-        <div className="pb-24">
-          <div className="header-gradient px-6 pt-12 pb-8">
-            <div className="flex justify-between items-center mb-4" style={{ position: 'relative', zIndex: 1 }}>
+        <div className="tab-scroll-content">
+          <div className="header-gradient px-6 pt-14 pb-8">
+            <div className="flex justify-between items-start mb-5" style={{ position: 'relative', zIndex: 1 }}>
               <div>
-                <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.75)' }}>
-                  {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'} 👋
+                <p className="text-[11px] font-semibold uppercase tracking-widest mb-1"
+                  style={{ color: 'rgba(255,255,255,0.6)', letterSpacing: '0.14em' }}>
+                  {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}
                 </p>
-                <h2 className="text-2xl font-bold text-white mt-0.5">Dr. {user?.name?.split(' ')[0] ?? '—'}</h2>
+                <h2 className="text-[28px] font-extrabold text-white leading-tight tracking-tight">
+                  Dr. {user?.name?.split(' ')[0] ?? ''}
+                </h2>
+                <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.65)' }}>Ready to see patients?</p>
               </div>
-              <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-lg"
-                style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '2px solid rgba(255,255,255,0.4)' }}>
-                {user?.name?.charAt(0)?.toUpperCase() ?? 'D'}
+              <div className="flex-shrink-0 p-0.5 rounded-full"
+                style={{ background: 'rgba(255,255,255,0.25)', border: '1.5px solid rgba(255,255,255,0.4)' }}>
+                <div className="w-11 h-11 rounded-full flex items-center justify-center font-extrabold text-lg"
+                  style={{ background: 'rgba(255,255,255,0.18)', color: '#fff' }}>
+                  {user?.name?.charAt(0)?.toUpperCase() ?? 'D'}
+                </div>
               </div>
             </div>
-            <div className="flex gap-3" style={{ position: 'relative', zIndex: 1 }}>
+            <div className="flex gap-2.5" style={{ position: 'relative', zIndex: 1 }}>
               {[
-                { label: 'Pending', value: appointments.filter(a => a.status === 'pending').length, icon: '⏳' },
-                { label: 'Confirmed', value: appointments.filter(a => a.status === 'confirmed').length, icon: '✅' },
-                { label: 'Completed', value: appointments.filter(a => a.status === 'completed').length, icon: '🏥' },
+                { label: 'Pending', value: appointments.filter(a => a.status === 'pending').length },
+                { label: 'Confirmed', value: appointments.filter(a => a.status === 'confirmed').length },
+                { label: 'Completed', value: appointments.filter(a => a.status === 'completed').length },
               ].map(s => (
-                <div key={s.label} className="flex-1 rounded-2xl px-3 py-2 text-center"
-                  style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-                  <p className="text-sm">{s.icon}</p>
-                  <p className="text-base font-bold text-white">{s.value}</p>
-                  <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.7)' }}>{s.label}</p>
+                <div key={s.label} className="glass-chip flex-1 px-3 py-2.5 text-center">
+                  <p className="text-xl font-extrabold text-white leading-none">{s.value}</p>
+                  <p className="text-[10px] mt-0.5 font-medium" style={{ color: 'rgba(255,255,255,0.68)' }}>{s.label}</p>
                 </div>
               ))}
             </div>
@@ -376,10 +381,13 @@ export default function DoctorDashboard() {
 
       {/* ── APPOINTMENTS ── */}
       {tab === 'appointments' && (
-        <div className="pb-24">
-          <div className="header-gradient px-6 pt-12 pb-6">
-            <h2 className="text-2xl font-bold text-white" style={{ position: 'relative', zIndex: 1 }}>Appointments</h2>
-            <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.7)', position: 'relative', zIndex: 1 }}>Manage your patient schedule</p>
+        <div className="tab-scroll-content">
+          <div className="header-gradient px-6 pt-14 pb-8">
+            <p className="text-[11px] font-semibold uppercase tracking-widest mb-1"
+              style={{ color: 'rgba(255,255,255,0.6)', letterSpacing: '0.14em', position: 'relative', zIndex: 1 }}>Schedule</p>
+            <h2 className="text-[26px] font-extrabold text-white tracking-tight leading-tight"
+              style={{ position: 'relative', zIndex: 1 }}>Appointments</h2>
+            <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.65)', position: 'relative', zIndex: 1 }}>Manage your patient schedule</p>
           </div>
           {apptMsg && (
             <div className="mx-6 mt-3 p-3 rounded-2xl text-sm text-center" style={{ background: '#EBF0FF', color: '#3B5BDB' }}>{apptMsg}</div>
@@ -505,13 +513,13 @@ export default function DoctorDashboard() {
                     <button onClick={() => handleToggleMedProfile(a)}
                       className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-xl"
                       style={{ background: '#F3E8FF', color: '#7C3AED' }}>
-                      🩺 Medical
+                      <Stethoscope size={11} /> Medical
                     </button>
                     {a.status === 'completed' && (
                       <button onClick={() => rxFor === a._id ? setRxFor(null) : handleOpenRx(a)}
                         className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-xl"
                         style={{ background: rxCache[a._id] ? '#D1FAE5' : '#FEF3C7', color: rxCache[a._id] ? '#065F46' : '#92400E' }}>
-                        💊 {rxCache[a._id] ? 'Prescription ✓' : 'Prescribe'}
+                        <Pill size={11} /> {rxCache[a._id] ? 'Prescription ✓' : 'Prescribe'}
                       </button>
                     )}
                   </div>
@@ -606,10 +614,13 @@ export default function DoctorDashboard() {
 
       {/* ── AVAILABILITY (messages tab) ── */}
       {tab === 'messages' && (
-        <div className="pb-24">
-          <div className="header-gradient px-6 pt-12 pb-6">
-            <h2 className="text-2xl font-bold text-white" style={{ position: 'relative', zIndex: 1 }}>Availability</h2>
-            <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.7)', position: 'relative', zIndex: 1 }}>Set your working hours</p>
+        <div className="tab-scroll-content">
+          <div className="header-gradient px-6 pt-14 pb-8">
+            <p className="text-[11px] font-semibold uppercase tracking-widest mb-1"
+              style={{ color: 'rgba(255,255,255,0.6)', letterSpacing: '0.14em', position: 'relative', zIndex: 1 }}>Working Hours</p>
+            <h2 className="text-[26px] font-extrabold text-white tracking-tight leading-tight"
+              style={{ position: 'relative', zIndex: 1 }}>Availability</h2>
+            <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.65)', position: 'relative', zIndex: 1 }}>Set your schedule</p>
           </div>
           <div className="px-6 mt-4">
             {slotMsg && (
@@ -654,7 +665,7 @@ export default function DoctorDashboard() {
 
       {/* ── PROFILE ── */}
       {tab === 'profile' && (
-        <div className="px-6 pt-12 pb-24">
+        <div className="tab-scroll-content px-6 pt-12">
           <h2 className="text-xl font-bold mb-6" style={{ color: '#1B1B2F' }}>Profile</h2>
 
           {/* Avatar + name */}
@@ -747,7 +758,13 @@ export default function DoctorDashboard() {
       {healthPatient && (
         <div className="absolute inset-0 overflow-y-auto" style={{ background: '#F8F9FE', zIndex: 50 }}>
           <div className="px-6 pt-12 pb-4 flex items-center gap-3 sticky top-0" style={{ background: '#ECFDF5' }}>
-            <button onClick={handleCloseHealth}><X size={20} style={{ color: '#059669' }} /></button>
+            <button
+              aria-label="Close health metrics"
+              onClick={handleCloseHealth}
+              className="inline-btn w-9 h-9 rounded-full flex items-center justify-center"
+              style={{ background: '#D1FAE5' }}>
+              <X size={18} style={{ color: '#059669' }} />
+            </button>
             <div className="flex-1">
               <h2 className="text-base font-bold" style={{ color: '#1B1B2F' }}>{healthPatient.name}</h2>
               <p className="text-xs" style={{ color: '#6B7280' }}>Health Metrics</p>

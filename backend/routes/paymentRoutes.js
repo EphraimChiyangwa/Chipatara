@@ -49,8 +49,8 @@ router.post('/initialize', authMiddleware, async (req, res) => {
     if (!doctorId || !date || !reason) return res.status(400).json({ message: 'doctorId, date, and reason are required.' })
 
     const appointmentDate = new Date(date)
-    if (isNaN(appointmentDate) || appointmentDate < new Date()) {
-      return res.status(400).json({ message: 'Invalid or past date.' })
+    if (isNaN(appointmentDate)) {
+      return res.status(400).json({ message: 'Invalid date format.' })
     }
 
     // Check availability

@@ -33,6 +33,9 @@ export const getMyDevices = () =>
 export const deleteDevice = (id: string) =>
   request(`/devices/${id}`, { method: 'DELETE', headers: headers(true) })
 
+export const getDeviceToken = (id: string) =>
+  request<{ token: string }>(`/devices/${id}/token`, { headers: headers(true) })
+
 export const getMyHealthMetrics = () =>
   request<any[]>('/devices/metrics', { headers: headers(true) })
 
