@@ -27,7 +27,17 @@ router.post("/register", async (req, res) => {
 
     await newUser.save();
 
-    res.status(201).json({ message: "User registered successfully" });
+    const token = jwt.sign(
+      { id: newUser._id, role: newUser.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    res.status(201).json({
+      message: "User registered successfully",
+      token,
+      user: { id: newUser._id, name: newUser.name, email: newUser.email, role: newUser.role }
+    });
 
   } catch (error) {
     console.error(error);
@@ -59,7 +69,8 @@ router.post("/login", async (req, res) => {
 
     res.json({
       message: "Login successful",
-      token
+      token,
+      user: { id: user._id, name: user.name, email: user.email, role: user.role }
     });
 
   } catch (error) {

@@ -1,12 +1,11 @@
 const { Resend } = require('resend')
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 const FROM = 'Chipatara Health <onboarding@resend.dev>'
 
 const sendEmail = async ({ to, subject, html }) => {
-  if (!process.env.RESEND_API_KEY) return
+  if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 're_your_api_key_here') return
   try {
+    const resend = new Resend(process.env.RESEND_API_KEY)
     await resend.emails.send({ from: FROM, to, subject, html })
   } catch (err) {
     console.error('Email failed:', err.message)
