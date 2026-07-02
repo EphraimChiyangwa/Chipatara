@@ -65,7 +65,7 @@ class ApiService {
       _post('/auth/register', {'name': name, 'email': email, 'password': password, 'role': role});
 
   static Future<void> changePassword(String current, String next) =>
-      _post('/auth/change-password', {'currentPassword': current, 'newPassword': next}, auth: true) as Future<void>;
+      _put('/auth/change-password', {'currentPassword': current, 'newPassword': next});
 
   // ── Doctors ───────────────────────────────────────────────────
   static Future<List<Doctor>> getDoctors({String search = '', String specialization = ''}) async {
@@ -116,7 +116,7 @@ class ApiService {
       _put('/appointments/$id/status', {'status': status});
 
   static Future<void> rateAppointment(String id, double rating, String review) =>
-      _post('/appointments/$id/rate', {'rating': rating, 'review': review}, auth: true);
+      _put('/appointments/$id/rating', {'rating': rating, 'review': review});
 
   // ── Health metrics ────────────────────────────────────────────
   static Future<List<HealthMetric>> getMyHealthMetrics() async {
@@ -142,12 +142,12 @@ class ApiService {
   }
 
   static Future<void> saveMedicalProfile(Map<String, dynamic> data) =>
-      _post('/medical-profile', data, auth: true);
+      _put('/medical-profile', data);
 
   // ── Doctor profile ────────────────────────────────────────────
   static Future<DoctorProfile?> getMyDoctorProfile() async {
     try {
-      final data = await _get('/doctors/profile/me');
+      final data = await _get('/doctors/me');
       if (data == null) return null;
       return DoctorProfile.fromJson(data as Map<String, dynamic>);
     } catch (_) { return null; }
@@ -160,5 +160,5 @@ class ApiService {
       _put('/doctors/profile', data);
 
   static Future<void> saveConsultationNotes(String appointmentId, String notes) =>
-      _post('/appointments/$appointmentId/notes', {'notes': notes}, auth: true);
+      _put('/appointments/$appointmentId/notes', {'notes': notes});
 }
