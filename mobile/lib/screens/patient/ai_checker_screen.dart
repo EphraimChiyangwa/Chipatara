@@ -29,9 +29,10 @@ class _AiCheckerScreenState extends State<AiCheckerScreen> {
   }
 
   Color _urgencyColor(String? u) => switch (u?.toLowerCase()) {
-    'emergency' || 'urgent' => AppColors.danger,
-    'soon' => AppColors.warning,
-    _ => AppColors.success,
+    'emergency' => AppColors.danger,
+    'high'      => const Color(0xFFDC6B0A),
+    'medium'    => AppColors.warning,
+    _           => AppColors.success,
   };
 
   @override
@@ -99,63 +100,96 @@ class _AiCheckerScreenState extends State<AiCheckerScreen> {
 
             if (_result != null) ...[
               const SizedBox(height: 16),
+
               // Urgency badge
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: _urgencyColor(_result!['urgencyLevel'] as String?).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: _urgencyColor(_result!['urgencyLevel'] as String?).withOpacity(0.3)),
-                ),
-                child: Row(children: [
-                  Icon(
-                    _result!['urgencyLevel']?.toString().toLowerCase() == 'emergency'
-                      ? Icons.emergency_rounded
-                      : Icons.health_and_safety_outlined,
-                    color: _urgencyColor(_result!['urgencyLevel'] as String?), size: 24,
+              Builder(builder: (_) {
+                final urgency = _result!['urgency'] as String? ?? 'low';
+                final color = _urgencyColor(urgency);
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: color.withValues(alpha: 0.3)),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  child: Row(children: [
+                    Icon(
+                      urgency == 'emergency' ? Icons.emergency_rounded : Icons.health_and_safety_outlined,
+                      color: color, size: 24,
+                    ),
+                    const SizedBox(width: 12),
                     Text(
-                      (_result!['urgencyLevel'] as String? ?? 'LOW').toUpperCase(),
+                      urgency.toUpperCase(),
                       style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 1,
-                        color: _urgencyColor(_result!['urgencyLevel'] as String?),
+                        fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 1, color: color,
                       ),
                     ),
-                    if (_result!['recommendation'] != null)
-                      Text(_result!['recommendation'] as String, style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13, color: AppColors.textPrimary,
-                      )),
-                  ])),
-                ]),
+                  ]),
+                );
+              }),
+              const SizedBox(height: 12),
+
+              // Instructions / advice
+              if (_result!['advice'] != null) _ResultCard(
+                title: 'What to do',
+                icon: Icons.assignment_outlined,
+                child: Text(_result!['advice'] as String, style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13, color: AppColors.textSecondary, height: 1.6,
+                )),
               ),
               const SizedBox(height: 12),
 
-              // Analysis
-              if (_result!['analysis'] != null) _ResultCard(
-                title: 'Analysis',
+              // Possible conditions
+              if (_result!['conditions'] is List && (_result!['conditions'] as List).isNotEmpty) _ResultCard(
+                title: 'Possible Conditions',
                 icon: Icons.biotech_outlined,
-                child: Text(_result!['analysis'] as String, style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13, color: AppColors.textSecondary, height: 1.5,
-                )),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: (_result!['conditions'] as List).map((c) {
+                    final map = c as Map<String, dynamic>;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          width: 8, height: 8,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF7C3AED),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(map['name'] as String? ?? '', style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary,
+                          )),
+                          if (map['description'] != null)
+                            Text(map['description'] as String, style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12, color: AppColors.textSecondary, height: 1.4,
+                            )),
+                        ])),
+                      ]),
+                    );
+                  }).toList(),
+                ),
               ),
 
-              // Possible conditions
-              if (_result!['possibleConditions'] is List && (_result!['possibleConditions'] as List).isNotEmpty) ...[
+              // Recommended specialists
+              if (_result!['recommendedSpecialists'] is List && (_result!['recommendedSpecialists'] as List).isNotEmpty) ...[
                 const SizedBox(height: 12),
                 _ResultCard(
-                  title: 'Possible Conditions',
-                  icon: Icons.list_alt_rounded,
+                  title: 'Recommended Specialists',
+                  icon: Icons.person_search_outlined,
                   child: Wrap(
                     spacing: 6, runSpacing: 6,
-                    children: (_result!['possibleConditions'] as List).map((c) => Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    children: (_result!['recommendedSpecialists'] as List).map((s) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF7C3AED).withOpacity(0.1),
+                        color: const Color(0xFF7C3AED).withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF7C3AED).withValues(alpha: 0.2)),
                       ),
-                      child: Text(c.toString(), style: GoogleFonts.plusJakartaSans(
+                      child: Text(s.toString(), style: GoogleFonts.plusJakartaSans(
                         fontSize: 12, color: const Color(0xFF7C3AED), fontWeight: FontWeight.w600,
                       )),
                     )).toList(),
