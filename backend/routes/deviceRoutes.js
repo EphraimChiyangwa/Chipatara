@@ -148,6 +148,18 @@ router.get('/metrics', authMiddleware, async (req, res) => {
   }
 })
 
+// POST /api/devices/fcm-token — store FCM push token for the logged-in user
+router.post('/fcm-token', authMiddleware, async (req, res) => {
+  try {
+    const { token } = req.body
+    if (!token) return res.status(400).json({ message: 'token is required' })
+    await User.findByIdAndUpdate(req.user.id, { fcmToken: token })
+    res.json({ message: 'FCM token saved' })
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+})
+
 // GET /api/devices/metrics/:patientId — patient metrics (doctor must have an appointment)
 router.get('/metrics/:patientId', authMiddleware, roleMiddleware('doctor'), async (req, res) => {
   try {

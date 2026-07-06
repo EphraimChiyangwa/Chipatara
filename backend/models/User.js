@@ -22,6 +22,11 @@ const UserSchema = new mongoose.Schema({
     type: String,
     enum: ["patient", "doctor", "admin"],
     default: "patient"
+  },
+
+  fcmToken: {
+    type: String,
+    default: null
   }
 
 });

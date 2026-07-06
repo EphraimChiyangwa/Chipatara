@@ -183,6 +183,23 @@ class ApiService {
     'notes': notes,
   }, auth: true);
 
+  // ── Payments ──────────────────────────────────────────────────
+  static Future<Map<String, dynamic>> initializePayment({
+    required String doctorId,
+    required String date,
+    required String reason,
+  }) => _post('/payments/initialize', {'doctorId': doctorId, 'date': date, 'reason': reason}, auth: true);
+
+  static Future<Map<String, dynamic>> verifyPayment({
+    required String reference,
+    required String doctorId,
+    required String date,
+    required String reason,
+  }) => _post('/payments/verify', {'reference': reference, 'doctorId': doctorId, 'date': date, 'reason': reason}, auth: true);
+
+  static Future<void> registerFcmToken(String token) =>
+      _post('/devices/fcm-token', {'token': token}, auth: true);
+
   static Future<Prescription?> getPrescription(String appointmentId) async {
     try {
       final data = await _get('/prescriptions/appointment/$appointmentId');

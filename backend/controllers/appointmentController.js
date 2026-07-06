@@ -2,6 +2,7 @@ const Appointment = require("../models/Appointment");
 const DoctorAvailability = require("../models/DoctorAvailability");
 const User = require("../models/User");
 const { sendEmail, emailTemplates } = require("../utils/emailService");
+const { sendPushNotification } = require("../utils/fcmService");
 
 const toMinutes = (time) => {
   const [hours, minutes] = time.split(":").map(Number);
@@ -85,6 +86,14 @@ exports.bookAppointment = async (req, res) => {
         patient.name, doctor.name, appointmentDate, reason
       );
       sendEmail({ to: patient.email, subject, html });
+      // Push notification to doctor
+      if (doctor.fcmToken) {
+        sendPushNotification(
+          doctor.fcmToken,
+          'New Appointment Request 📅',
+          `${patient.name} has booked an appointment with you.`
+        );
+      }
     }
 
     res.status(201).json({ message: "Appointment booked successfully.", appointment });
@@ -120,7 +129,7 @@ exports.updateAppointmentStatus = async (req, res) => {
     appointment.status = status;
     await appointment.save();
 
-    // Notify patient of status change
+    // Email the patient
     const { subject, html } = emailTemplates.appointmentStatusUpdate(
       appointment.patient.name,
       status,
@@ -129,6 +138,18 @@ exports.updateAppointmentStatus = async (req, res) => {
       appointment.date
     );
     sendEmail({ to: appointment.patient.email, subject, html });
+
+    // Push notification to patient
+    const patientFull = await User.findById(appointment.patient._id).select('fcmToken').lean();
+    if (patientFull?.fcmToken) {
+      const titles = { confirmed: 'Appointment Confirmed ✅', cancelled: 'Appointment Cancelled', completed: 'Consultation Complete' };
+      const bodies = {
+        confirmed: `Dr. ${appointment.doctor.name} confirmed your appointment.`,
+        cancelled: `Dr. ${appointment.doctor.name} cancelled your appointment.`,
+        completed: `Your consultation with Dr. ${appointment.doctor.name} is complete.`,
+      };
+      sendPushNotification(patientFull.fcmToken, titles[status], bodies[status]);
+    }
 
     res.json({ message: `Appointment ${status} successfully.`, appointment });
 

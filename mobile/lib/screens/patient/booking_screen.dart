@@ -5,6 +5,7 @@ import '../../config/constants.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
+import 'payment_screen.dart';
 
 class BookingScreen extends StatefulWidget {
   final Doctor doctor;
@@ -38,21 +39,44 @@ class _BookingScreenState extends State<BookingScreen> {
 
   Future<void> _book() async {
     if (_reason.text.trim().isEmpty || _selectedSlot == null) return;
+    final fee = widget.doctor.profile?.consultationFee ?? 0;
     setState(() => _loading = true);
     try {
-      await ApiService.bookAppointment(
-        doctorId: widget.doctor.id,
-        date: _selectedDate.toIso8601String(),
-        reason: _reason.text.trim(),
-        slotId: _selectedSlot!.id,
-      );
-      setState(() => _success = true);
+      if (fee > 0) {
+        // Paid appointment — go through Paystack
+        final res = await ApiService.initializePayment(
+          doctorId: widget.doctor.id,
+          date: _selectedDate.toIso8601String(),
+          reason: _reason.text.trim(),
+        );
+        if (!mounted) return;
+        await Navigator.push(context, MaterialPageRoute(
+          builder: (_) => PaymentScreen(
+            authorizationUrl: res['authorization_url'] as String,
+            reference: res['reference'] as String,
+            doctorId: widget.doctor.id,
+            date: _selectedDate.toIso8601String(),
+            reason: _reason.text.trim(),
+            doctorName: widget.doctor.name,
+            fee: (res['fee'] as num).toDouble(),
+          ),
+        ));
+      } else {
+        // Free appointment — direct booking
+        await ApiService.bookAppointment(
+          doctorId: widget.doctor.id,
+          date: _selectedDate.toIso8601String(),
+          reason: _reason.text.trim(),
+          slotId: _selectedSlot!.id,
+        );
+        if (mounted) setState(() => _success = true);
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: AppColors.danger),
       );
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 

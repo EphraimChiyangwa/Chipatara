@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../config/constants.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
@@ -222,9 +223,19 @@ class _ApptCard extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(child: _ActionBtn(label: 'Decline', color: AppColors.danger, onTap: onCancel, outlined: true)),
           ] else if (appt.status == 'confirmed') ...[
+            Expanded(child: _ActionBtn(
+              label: 'Join Video',
+              color: AppColors.success,
+              icon: Icons.videocam_outlined,
+              onTap: () => launchUrl(
+                Uri.parse('https://meet.jit.si/chipatara-${appt.id}'),
+                mode: LaunchMode.externalApplication,
+              ),
+            )),
+            const SizedBox(width: 8),
             Expanded(child: _ActionBtn(label: 'Chat', color: AppColors.primary, icon: Icons.chat_bubble_outline, onTap: onChat)),
             const SizedBox(width: 8),
-            Expanded(child: _ActionBtn(label: 'Complete', color: AppColors.success, onTap: onComplete)),
+            Expanded(child: _ActionBtn(label: 'Complete', color: AppColors.textSecondary, onTap: onComplete, outlined: true)),
           ] else if (appt.status == 'completed') ...[
             Expanded(child: _ActionBtn(label: 'Prescribe', color: AppColors.primary, icon: Icons.medication_outlined, onTap: onPrescribe)),
           ],
