@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "939851471848",
+    "project_id": "chipatara-a3ac4",
+    "storage_bucket": "chipatara-a3ac4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:939851471848:android:63198e0569bc681c52625d",
+        "android_client_info": {
+          "package_name": "com.chipatara.chipatara_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDMy8Qh91hAiFIdCzOctahEckpxd1_TVbk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
