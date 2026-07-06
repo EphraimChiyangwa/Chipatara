@@ -50,9 +50,12 @@ class _ChatScreenState extends State<ChatScreen> {
     final token = context.read<AuthProvider>().token;
     _socket = IO.io(kSocketUrl, IO.OptionBuilder()
       .setTransports(['websocket'])
-      .setExtraHeaders({'Authorization': 'Bearer $token'})
+      .setAuth({'token': token})
       .build(),
     );
+    _socket!.on('connect', (_) {
+      _socket!.emit('join_appointment', {'appointmentId': widget.appointment.id});
+    });
     _socket!.on('receive_message', (data) {
       final msg = ChatMessage.fromJson(data as Map<String, dynamic>);
       if (msg.appointmentId == widget.appointment.id) {
@@ -60,7 +63,6 @@ class _ChatScreenState extends State<ChatScreen> {
         _scrollToBottom();
       }
     });
-    _socket!.emit('join_appointment', {'appointmentId': widget.appointment.id});
   }
 
   void _scrollToBottom() {

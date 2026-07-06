@@ -22,6 +22,14 @@ const doctorSchema = new mongoose.Schema({
   bio: {
     type: String
   },
+  licenseNumber: {
+    type: String,
+    default: ''
+  },
+  yearsOfExperience: {
+    type: Number,
+    default: 0
+  },
   verified: {
     type: Boolean,
     default: false

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../config/constants.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
@@ -165,7 +166,10 @@ class _ApptCard extends StatelessWidget {
                 )),
                 if (appt.status == 'confirmed') ...[
                   Expanded(child: ElevatedButton.icon(
-                    onPressed: () {},
+                    onPressed: () => launchUrl(
+                      Uri.parse('https://meet.jit.si/chipatara-${appt.id}'),
+                      mode: LaunchMode.externalApplication,
+                    ),
                     icon: const Icon(Icons.videocam_outlined, size: 16),
                     label: Text('Join Video', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
                     style: ElevatedButton.styleFrom(
