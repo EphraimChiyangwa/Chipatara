@@ -136,6 +136,12 @@ class _DoctorHomeTabState extends State<DoctorHomeTab> {
                     onChat: () => Navigator.push(context, MaterialPageRoute(
                       builder: (_) => ChatScreen(appointment: _filtered[i]),
                     )),
+                    onPrescribe: () => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => _PrescribeSheet(appointment: _filtered[i]),
+                    ),
                   ),
                 ),
           )),
@@ -169,11 +175,11 @@ class _FilterChip extends StatelessWidget {
 
 class _ApptCard extends StatelessWidget {
   final Appointment appt;
-  final VoidCallback onConfirm, onComplete, onCancel, onChat;
+  final VoidCallback onConfirm, onComplete, onCancel, onChat, onPrescribe;
 
   const _ApptCard({
     required this.appt, required this.onConfirm, required this.onComplete,
-    required this.onCancel, required this.onChat,
+    required this.onCancel, required this.onChat, required this.onPrescribe,
   });
 
   @override
@@ -219,6 +225,8 @@ class _ApptCard extends StatelessWidget {
             Expanded(child: _ActionBtn(label: 'Chat', color: AppColors.primary, icon: Icons.chat_bubble_outline, onTap: onChat)),
             const SizedBox(width: 8),
             Expanded(child: _ActionBtn(label: 'Complete', color: AppColors.success, onTap: onComplete)),
+          ] else if (appt.status == 'completed') ...[
+            Expanded(child: _ActionBtn(label: 'Prescribe', color: AppColors.primary, icon: Icons.medication_outlined, onTap: onPrescribe)),
           ],
         ]),
       ]),
@@ -253,5 +261,202 @@ class _ActionBtn extends StatelessWidget {
         )),
       ]),
     ),
+  );
+}
+
+// ── Prescription sheet ─────────────────────────────────────────────────────
+
+const _frequencies = ['Once daily', 'Twice daily', 'Three times daily', 'Every 8 hours', 'Every 12 hours', 'As needed', 'Weekly'];
+
+class _PrescribeSheet extends StatefulWidget {
+  final Appointment appointment;
+  const _PrescribeSheet({required this.appointment});
+
+  @override
+  State<_PrescribeSheet> createState() => _PrescribeSheetState();
+}
+
+class _PrescribeSheetState extends State<_PrescribeSheet> {
+  final _notes = TextEditingController();
+  final List<_MedEntry> _meds = [];
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _meds.add(_MedEntry());
+    _loadExisting();
+  }
+
+  Future<void> _loadExisting() async {
+    final rx = await ApiService.getPrescription(widget.appointment.id);
+    if (rx == null || !mounted) return;
+    setState(() {
+      _notes.text = rx.notes;
+      _meds.clear();
+      for (final m in rx.medications) {
+        _meds.add(_MedEntry()
+          ..name.text    = m.name
+          ..dosage.text  = m.dosage
+          ..freq         = m.frequency
+          ..duration.text = m.duration
+          ..instructions.text = m.instructions);
+      }
+      if (_meds.isEmpty) _meds.add(_MedEntry());
+    });
+  }
+
+  Future<void> _save() async {
+    for (final m in _meds) {
+      if (m.name.text.trim().isEmpty || m.dosage.text.trim().isEmpty || m.duration.text.trim().isEmpty) {
+        setState(() => _error = 'Please fill in name, dosage, and duration for every medication.');
+        return;
+      }
+    }
+    setState(() { _loading = true; _error = null; });
+    try {
+      await ApiService.savePrescription(
+        widget.appointment.id,
+        _meds.map((m) => {
+          'name': m.name.text.trim(),
+          'dosage': m.dosage.text.trim(),
+          'frequency': m.freq,
+          'duration': m.duration.text.trim(),
+          'instructions': m.instructions.text.trim(),
+        }).toList(),
+        _notes.text.trim(),
+      );
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Prescription saved'), backgroundColor: AppColors.success),
+        );
+      }
+    } catch (e) {
+      setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 20, 20, bottom + 20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text('Write Prescription', style: GoogleFonts.plusJakartaSans(
+            fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary,
+          )),
+          const Spacer(),
+          IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+        ]),
+        Text('Patient: ${widget.appointment.patientName}', style: GoogleFonts.plusJakartaSans(
+          fontSize: 13, color: AppColors.textSecondary,
+        )),
+        const SizedBox(height: 16),
+        Flexible(child: SingleChildScrollView(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ..._meds.asMap().entries.map((e) => _MedRow(
+              entry: e.value,
+              index: e.key,
+              canRemove: _meds.length > 1,
+              onRemove: () => setState(() => _meds.removeAt(e.key)),
+              onChanged: () => setState(() {}),
+            )),
+            TextButton.icon(
+              onPressed: () => setState(() => _meds.add(_MedEntry())),
+              icon: const Icon(Icons.add_rounded, size: 16),
+              label: Text('Add medication', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(height: 8),
+            AppInput(label: 'Notes (optional)', hint: 'Additional instructions…', controller: _notes, maxLines: 2),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: AppColors.dangerLight, borderRadius: BorderRadius.circular(10)),
+                child: Text(_error!, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.danger)),
+              ),
+            ],
+            const SizedBox(height: 16),
+            AppButton(label: 'Save Prescription', onTap: _save, loading: _loading, icon: Icons.save_outlined),
+          ],
+        ))),
+      ]),
+    );
+  }
+}
+
+class _MedEntry {
+  final name         = TextEditingController();
+  final dosage       = TextEditingController();
+  final duration     = TextEditingController();
+  final instructions = TextEditingController();
+  String freq        = _frequencies.first;
+}
+
+class _MedRow extends StatelessWidget {
+  final _MedEntry entry;
+  final int index;
+  final bool canRemove;
+  final VoidCallback onRemove, onChanged;
+
+  const _MedRow({required this.entry, required this.index, required this.canRemove, required this.onRemove, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: AppColors.surface, borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: const Color(0xFFE5E7EB)),
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Text('Medication ${index + 1}', style: GoogleFonts.plusJakartaSans(
+          fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary,
+        )),
+        const Spacer(),
+        if (canRemove) IconButton(
+          onPressed: onRemove, icon: const Icon(Icons.remove_circle_outline, color: AppColors.danger, size: 18),
+          padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+        ),
+      ]),
+      const SizedBox(height: 8),
+      AppInput(label: 'Name', hint: 'e.g. Amoxicillin', controller: entry.name),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: AppInput(label: 'Dosage', hint: 'e.g. 500mg', controller: entry.dosage)),
+        const SizedBox(width: 8),
+        Expanded(child: AppInput(label: 'Duration', hint: 'e.g. 7 days', controller: entry.duration)),
+      ]),
+      const SizedBox(height: 8),
+      Text('Frequency', style: GoogleFonts.plusJakartaSans(
+        fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary,
+      )),
+      const SizedBox(height: 4),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: DropdownButtonHideUnderline(child: DropdownButton<String>(
+          value: entry.freq,
+          isExpanded: true,
+          style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AppColors.textPrimary),
+          onChanged: (v) { if (v != null) { entry.freq = v; onChanged(); } },
+          items: _frequencies.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
+        )),
+      ),
+    ]),
   );
 }

@@ -30,6 +30,23 @@ class _AppointmentsTabState extends State<AppointmentsTab> {
     setState(() => _loading = false);
   }
 
+  Future<void> _viewRx(Appointment appt) async {
+    final rx = await ApiService.getPrescription(appt.id);
+    if (!mounted) return;
+    if (rx == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No prescription for this appointment yet')),
+      );
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RxViewSheet(rx: rx),
+    );
+  }
+
   Color _statusColor(String s) => switch (s) {
     'confirmed' => AppColors.success,
     'completed' => AppColors.primary,
@@ -71,6 +88,7 @@ class _AppointmentsTabState extends State<AppointmentsTab> {
                     _load();
                   },
                   onRate: () => setState(() => _ratingFor = _appointments[i].id),
+                  onViewRx: () => _viewRx(_appointments[i]),
                 ),
               ),
             )),
@@ -93,10 +111,11 @@ class _ApptCard extends StatelessWidget {
   final IconData statusIcon;
   final VoidCallback onCancel;
   final VoidCallback onRate;
+  final VoidCallback onViewRx;
 
   const _ApptCard({
     required this.appt, required this.statusColor, required this.statusIcon,
-    required this.onCancel, required this.onRate,
+    required this.onCancel, required this.onRate, required this.onViewRx,
   });
 
   @override
@@ -181,18 +200,33 @@ class _ApptCard extends StatelessWidget {
                 ],
               ]),
             ],
-            if (appt.status == 'completed' && appt.rating == null) ...[
+            if (appt.status == 'completed') ...[
               const SizedBox(height: 12),
-              SizedBox(width: double.infinity, child: OutlinedButton.icon(
-                onPressed: onRate,
-                icon: const Icon(Icons.star_outline_rounded, size: 16),
-                label: Text('Rate this visit', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              )),
+              Row(children: [
+                Expanded(child: OutlinedButton.icon(
+                  onPressed: onViewRx,
+                  icon: const Icon(Icons.medication_outlined, size: 16),
+                  label: Text('View Rx', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF059669),
+                    side: const BorderSide(color: Color(0xFF059669)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                )),
+                if (appt.rating == null) ...[
+                  const SizedBox(width: 8),
+                  Expanded(child: OutlinedButton.icon(
+                    onPressed: onRate,
+                    icon: const Icon(Icons.star_outline_rounded, size: 16),
+                    label: Text('Rate', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  )),
+                ],
+              ]),
             ],
           ]),
         ),
@@ -258,4 +292,95 @@ class _RatingSheetState extends State<_RatingSheet> {
       ]),
     );
   }
+}
+
+class _RxViewSheet extends StatelessWidget {
+  final Prescription rx;
+  const _RxViewSheet({required this.rx});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.medication_outlined, color: Color(0xFF059669), size: 22),
+          const SizedBox(width: 10),
+          Text('Prescription', style: GoogleFonts.plusJakartaSans(
+            fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary,
+          )),
+          const Spacer(),
+          IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+        ]),
+        Text('Dr. ${rx.doctorName}', style: GoogleFonts.plusJakartaSans(
+          fontSize: 13, color: AppColors.textSecondary,
+        )),
+        const SizedBox(height: 16),
+        Flexible(child: SingleChildScrollView(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ...rx.medications.asMap().entries.map((e) {
+              final m = e.value;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(m.name, style: GoogleFonts.plusJakartaSans(
+                    fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary,
+                  )),
+                  const SizedBox(height: 6),
+                  _RxRow(Icons.medication_liquid_outlined, '${m.dosage}  ·  ${m.frequency}'),
+                  _RxRow(Icons.schedule_outlined, m.duration),
+                  if (m.instructions.isNotEmpty) _RxRow(Icons.info_outline, m.instructions),
+                ]),
+              );
+            }),
+            if (rx.notes.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Icon(Icons.sticky_note_2_outlined, color: Color(0xFFD97706), size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(rx.notes, style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13, color: const Color(0xFF92400E),
+                  ))),
+                ]),
+              ),
+            ],
+          ],
+        ))),
+      ]),
+    );
+  }
+}
+
+class _RxRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _RxRow(this.icon, this.text);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 4),
+    child: Row(children: [
+      Icon(icon, size: 13, color: AppColors.textMuted),
+      const SizedBox(width: 6),
+      Expanded(child: Text(text, style: GoogleFonts.plusJakartaSans(
+        fontSize: 12, color: AppColors.textSecondary,
+      ))),
+    ]),
+  );
 }

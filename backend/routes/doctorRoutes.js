@@ -23,6 +23,7 @@ router.post("/profile", authMiddleware, roleMiddleware("doctor"), async (req, re
       hospital,
       consultationFee,
       bio,
+      verified: true,
     });
 
     await newDoctor.save();
@@ -42,11 +43,11 @@ router.post("/profile", authMiddleware, roleMiddleware("doctor"), async (req, re
 // ✅ UPDATE DOCTOR PROFILE
 router.put("/profile", authMiddleware, roleMiddleware("doctor"), async (req, res) => {
   try {
-    const { specialization, hospital, consultationFee, bio } = req.body;
+    const { specialization, hospital, consultationFee, bio, licenseNumber, yearsOfExperience } = req.body;
 
     const profile = await Doctor.findOneAndUpdate(
       { user: req.user.id },
-      { specialization, hospital, consultationFee: Number(consultationFee), bio },
+      { specialization, hospital, consultationFee: Number(consultationFee), bio, licenseNumber, yearsOfExperience: Number(yearsOfExperience) || 0 },
       { new: true }
     );
 

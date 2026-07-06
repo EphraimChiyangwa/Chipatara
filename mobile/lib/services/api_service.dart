@@ -171,4 +171,23 @@ class ApiService {
 
   static Future<void> saveConsultationNotes(String appointmentId, String notes) =>
       _put('/appointments/$appointmentId/notes', {'notes': notes});
+
+  // ── Prescriptions ─────────────────────────────────────────────
+  static Future<void> savePrescription(
+    String appointmentId,
+    List<Map<String, dynamic>> medications,
+    String notes,
+  ) => _post('/prescriptions', {
+    'appointmentId': appointmentId,
+    'medications': medications,
+    'notes': notes,
+  }, auth: true);
+
+  static Future<Prescription?> getPrescription(String appointmentId) async {
+    try {
+      final data = await _get('/prescriptions/appointment/$appointmentId');
+      if (data == null) return null;
+      return Prescription.fromJson(data as Map<String, dynamic>);
+    } catch (_) { return null; }
+  }
 }

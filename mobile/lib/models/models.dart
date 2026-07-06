@@ -179,6 +179,60 @@ class HealthMetric {
   );
 }
 
+class Medication {
+  final String name;
+  final String dosage;
+  final String frequency;
+  final String duration;
+  final String instructions;
+
+  Medication({
+    required this.name, required this.dosage,
+    required this.frequency, required this.duration,
+    this.instructions = '',
+  });
+
+  factory Medication.fromJson(Map<String, dynamic> j) => Medication(
+    name: j['name'] ?? '',
+    dosage: j['dosage'] ?? '',
+    frequency: j['frequency'] ?? '',
+    duration: j['duration'] ?? '',
+    instructions: j['instructions'] ?? '',
+  );
+
+  Map<String, dynamic> toJson() => {
+    'name': name, 'dosage': dosage,
+    'frequency': frequency, 'duration': duration,
+    'instructions': instructions,
+  };
+}
+
+class Prescription {
+  final String id;
+  final dynamic doctor;
+  final List<Medication> medications;
+  final String notes;
+  final DateTime createdAt;
+
+  Prescription({
+    required this.id, required this.doctor,
+    required this.medications, required this.notes,
+    required this.createdAt,
+  });
+
+  String get doctorName => doctor is Map ? (doctor['name'] ?? 'Doctor') : 'Doctor';
+
+  factory Prescription.fromJson(Map<String, dynamic> j) => Prescription(
+    id: j['_id'] ?? '',
+    doctor: j['doctor'],
+    medications: (j['medications'] as List? ?? [])
+        .map((m) => Medication.fromJson(m as Map<String, dynamic>))
+        .toList(),
+    notes: j['notes'] ?? '',
+    createdAt: DateTime.tryParse(j['createdAt'] ?? '') ?? DateTime.now(),
+  );
+}
+
 class ChatMessage {
   final String id;
   final String text;
@@ -199,6 +253,7 @@ class ChatMessage {
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) {
+
     final sender = j['sender'];
     return ChatMessage(
       id: j['_id'] ?? '',
