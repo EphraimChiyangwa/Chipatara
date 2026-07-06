@@ -67,6 +67,9 @@ class ApiService {
   static Future<void> changePassword(String current, String next) =>
       _put('/auth/change-password', {'currentPassword': current, 'newPassword': next});
 
+  static Future<void> forgotPassword(String email) =>
+      _post('/auth/forgot-password', {'email': email});
+
   // ── Doctors ───────────────────────────────────────────────────
   static Future<List<Doctor>> getDoctors({String search = '', String specialization = ''}) async {
     var url = '/doctors?';
@@ -85,6 +88,13 @@ class ApiService {
     final data = await _get('/availability/$doctorId') as List;
     return data.map((s) => AvailabilitySlot.fromJson(s)).toList();
   }
+
+  static Future<AvailabilitySlot> addAvailabilitySlot(String day, String start, String end) async {
+    final data = await _post('/availability', {'day': day, 'startTime': start, 'endTime': end}, auth: true);
+    return AvailabilitySlot.fromJson(data['availability'] as Map<String, dynamic>);
+  }
+
+  static Future<void> deleteAvailabilitySlot(String id) => _delete('/availability/$id');
 
   // ── Appointments ──────────────────────────────────────────────
   static Future<List<Appointment>> getPatientAppointments() async {

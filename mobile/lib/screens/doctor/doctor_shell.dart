@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../config/constants.dart';
+import 'availability_tab.dart';
 import 'home_tab.dart';
 import 'profile_tab.dart';
 
@@ -16,6 +17,7 @@ class _DoctorShellState extends State<DoctorShell> {
 
   final _tabs = const [
     DoctorHomeTab(),
+    DoctorAvailabilityTab(),
     DoctorProfileTab(),
   ];
 
@@ -37,6 +39,7 @@ class _FloatingNav extends StatelessWidget {
 
   static const _items = [
     (icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard_rounded, label: 'Dashboard'),
+    (icon: Icons.calendar_month_outlined, activeIcon: Icons.calendar_month_rounded, label: 'Availability'),
     (icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: 'Profile'),
   ];
 

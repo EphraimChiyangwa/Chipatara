@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../config/constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/widgets.dart';
+import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -70,6 +71,18 @@ class _LoginScreenState extends State<LoginScreen> {
               AppInput(label: 'Email', hint: 'you@example.com', controller: _email, keyboardType: TextInputType.emailAddress),
               const SizedBox(height: 16),
               AppInput(label: 'Password', hint: '••••••••', controller: _password, obscure: true),
+              Align(
+                alignment: Alignment.centerRight,
+                child: GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text('Forgot password?', style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600,
+                    )),
+                  ),
+                ),
+              ),
               if (_error != null) ...[
                 const SizedBox(height: 14),
                 Container(
