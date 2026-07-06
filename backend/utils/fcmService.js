@@ -1,23 +1,33 @@
+const admin = require('firebase-admin');
+
+let initialized = false;
+
+function getMessaging() {
+  if (!initialized) {
+    try {
+      const serviceAccount = require('../firebase-service-account.json');
+      admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+      initialized = true;
+    } catch (e) {
+      console.warn('[FCM] firebase-service-account.json not found — push notifications disabled');
+      return null;
+    }
+  }
+  return admin.messaging();
+}
+
 const sendPushNotification = async (fcmToken, title, body) => {
-  if (!process.env.FCM_SERVER_KEY || !fcmToken) return;
+  if (!fcmToken) return;
+  const messaging = getMessaging();
+  if (!messaging) return;
   try {
-    const res = await fetch('https://fcm.googleapis.com/fcm/send', {
-      method: 'POST',
-      headers: {
-        'Authorization': `key=${process.env.FCM_SERVER_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        to: fcmToken,
-        notification: { title, body },
-        android: { priority: 'high' },
-        priority: 'high',
-      }),
+    await messaging.send({
+      token: fcmToken,
+      notification: { title, body },
+      android: { priority: 'high' },
     });
-    const data = await res.json();
-    if (!data.success) console.warn('[FCM] Send failed:', JSON.stringify(data.results?.[0]));
   } catch (err) {
-    console.warn('[FCM] Error:', err.message);
+    console.warn('[FCM] Send failed:', err.message);
   }
 };
 
