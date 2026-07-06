@@ -277,9 +277,14 @@ class _DoctorCard extends StatelessWidget {
               if (doctor.averageRating > 0) ...[
                 const Icon(Icons.star_rounded, size: 14, color: Color(0xFFF59E0B)),
                 const SizedBox(width: 3),
-                Text(doctor.averageRating.toStringAsFixed(1), style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary,
-                )),
+                Text(
+                  doctor.totalRatings > 0
+                    ? '${doctor.averageRating.toStringAsFixed(1)} (${doctor.totalRatings})'
+                    : doctor.averageRating.toStringAsFixed(1),
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary,
+                  ),
+                ),
                 const SizedBox(width: 8),
               ],
               if (doctor.profile != null)

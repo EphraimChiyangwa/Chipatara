@@ -67,7 +67,7 @@ class Doctor {
     email: j['email'] ?? '',
     profile: j['profile'] != null ? DoctorProfile.fromJson(j['profile']) : null,
     averageRating: (j['averageRating'] ?? 0).toDouble(),
-    totalRatings: j['totalRatings'] ?? 0,
+    totalRatings: j['reviewCount'] ?? j['totalRatings'] ?? 0,
   );
 }
 

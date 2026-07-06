@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../config/constants.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
 
 class ProfileTab extends StatefulWidget {
@@ -13,20 +14,51 @@ class ProfileTab extends StatefulWidget {
 }
 
 class _ProfileTabState extends State<ProfileTab> {
-  final _current  = TextEditingController();
-  final _newPw    = TextEditingController();
-  final _confirm  = TextEditingController();
+  // Edit name
+  final _nameCtrl = TextEditingController();
+  bool _nameLoading = false;
+  String? _nameMsg;
+
+  // Change password
+  final _current = TextEditingController();
+  final _newPw   = TextEditingController();
+  final _confirm = TextEditingController();
   bool _pwLoading = false;
   String? _pwMsg;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final name = context.read<AuthProvider>().user?.name ?? '';
+    if (_nameCtrl.text.isEmpty) _nameCtrl.text = name;
+  }
+
+  Future<void> _saveName() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) return;
+    setState(() { _nameLoading = true; _nameMsg = null; });
+    try {
+      await context.read<AuthProvider>().updateName(name);
+      setState(() => _nameMsg = 'Name updated.');
+    } catch (e) {
+      setState(() => _nameMsg = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      setState(() => _nameLoading = false);
+    }
+  }
 
   Future<void> _changePassword() async {
     if (_newPw.text != _confirm.text) {
       setState(() => _pwMsg = 'New passwords do not match.');
       return;
     }
+    if (_newPw.text.length < 6) {
+      setState(() => _pwMsg = 'Password must be at least 6 characters.');
+      return;
+    }
     setState(() { _pwLoading = true; _pwMsg = null; });
     try {
-      // await ApiService.changePassword(_current.text, _newPw.text);
+      await ApiService.changePassword(_current.text, _newPw.text);
       setState(() => _pwMsg = 'Password changed successfully.');
       _current.clear(); _newPw.clear(); _confirm.clear();
     } catch (e) {
@@ -49,7 +81,7 @@ class _ProfileTabState extends State<ProfileTab> {
       Expanded(child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // Profile card
+          // Avatar card
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -97,7 +129,26 @@ class _ProfileTabState extends State<ProfileTab> {
               ])),
             ]),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+
+          // Edit name
+          _SectionCard(
+            icon: Icons.edit_outlined,
+            title: 'Display Name',
+            child: Column(children: [
+              AppInput(label: 'Full Name', controller: _nameCtrl),
+              if (_nameMsg != null) ...[
+                const SizedBox(height: 8),
+                Text(_nameMsg!, style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  color: _nameMsg!.contains('updated') ? AppColors.success : AppColors.danger,
+                )),
+              ],
+              const SizedBox(height: 12),
+              AppButton(label: 'Save Name', onTap: _saveName, loading: _nameLoading),
+            ]),
+          ),
+          const SizedBox(height: 16),
 
           // Change password
           _SectionCard(
@@ -120,9 +171,9 @@ class _ProfileTabState extends State<ProfileTab> {
               AppButton(label: 'Update Password', onTap: _changePassword, loading: _pwLoading),
             ]),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // Logout
+          // Sign out
           AppButton(
             label: 'Sign Out',
             color: AppColors.dangerLight,
@@ -141,7 +192,6 @@ class _SectionCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final Widget child;
-
   const _SectionCard({required this.icon, required this.title, required this.child});
 
   @override

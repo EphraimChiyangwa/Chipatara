@@ -10,6 +10,8 @@ const connectDB = require('./config/db')
 const { startReminderService } = require('./utils/reminderService')
 const Message = require('./models/Message')
 const Appointment = require('./models/Appointment')
+const User = require('./models/User')
+const { sendPushNotification } = require('./utils/fcmService')
 
 dotenv.config()
 connectDB()
@@ -130,6 +132,15 @@ io.on('connection', (socket) => {
       await msg.populate('sender', 'name role')
 
       io.to(appointmentId).emit('message', msg)
+
+      // Push notification to the other participant
+      const recipientId = appt.patient.toString() === uid ? appt.doctor : appt.patient
+      User.findById(recipientId).select('fcmToken').lean().then((recipient) => {
+        if (recipient?.fcmToken) {
+          const senderName = msg.sender?.name ?? 'New message'
+          sendPushNotification(recipient.fcmToken, senderName, text.trim().slice(0, 100))
+        }
+      }).catch(() => {})
     } catch { /* ignore */ }
   })
 })

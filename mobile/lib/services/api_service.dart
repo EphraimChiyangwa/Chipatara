@@ -67,6 +67,9 @@ class ApiService {
   static Future<void> changePassword(String current, String next) =>
       _put('/auth/change-password', {'currentPassword': current, 'newPassword': next});
 
+  static Future<Map<String, dynamic>> updateProfile(String name) async =>
+      await _put('/auth/profile', {'name': name}) as Map<String, dynamic>;
+
   static Future<void> forgotPassword(String email) =>
       _post('/auth/forgot-password', {'email': email});
 

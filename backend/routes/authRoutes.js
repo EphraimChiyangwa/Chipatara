@@ -116,6 +116,22 @@ router.put("/change-password", authMiddleware, async (req, res) => {
   }
 });
 
+// PUT /api/auth/profile — update display name
+router.put("/profile", authMiddleware, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name?.trim()) return res.status(400).json({ message: "Name is required." });
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { name: name.trim() },
+      { new: true }
+    ).select("-password");
+    res.json({ message: "Profile updated.", user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 // POST /api/auth/forgot-password
 router.post("/forgot-password", async (req, res) => {
   try {
