@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../config/constants.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
+import '../../services/health_connect_service.dart';
 import '../../widgets/widgets.dart';
 
 class HealthScreen extends StatefulWidget {
@@ -16,6 +17,8 @@ class HealthScreen extends StatefulWidget {
 class _HealthScreenState extends State<HealthScreen> {
   List<HealthMetric> _metrics = [];
   bool _loading = true;
+  bool _syncing = false;
+  String? _syncMsg;
 
   @override
   void initState() { super.initState(); _load(); }
@@ -24,6 +27,28 @@ class _HealthScreenState extends State<HealthScreen> {
     setState(() => _loading = true);
     try { _metrics = await ApiService.getMyHealthMetrics(); } catch (_) {}
     setState(() => _loading = false);
+  }
+
+  Future<void> _syncFromWatch() async {
+    setState(() { _syncing = true; _syncMsg = null; });
+    try {
+      final granted = await HealthConnectService.requestPermissions();
+      if (!granted) {
+        setState(() => _syncMsg = 'Permission denied. Grant access in Health Connect settings.');
+        return;
+      }
+      final payload = await HealthConnectService.syncNow();
+      if (payload == null) {
+        setState(() => _syncMsg = 'No recent data found on your device.');
+      } else {
+        setState(() => _syncMsg = 'Synced ${payload.length} metric(s) from your watch.');
+        await _load();
+      }
+    } catch (e) {
+      setState(() => _syncMsg = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      setState(() => _syncing = false);
+    }
   }
 
   bool _isAlert(HealthMetric m) =>
@@ -48,9 +73,9 @@ class _HealthScreenState extends State<HealthScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withOpacity(0.3)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
               ),
               child: Text('Refresh', style: GoogleFonts.plusJakartaSans(
                 fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white,
@@ -58,13 +83,85 @@ class _HealthScreenState extends State<HealthScreen> {
             ),
           ),
         ),
+        // Sync from Watch banner
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _syncing ? null : _syncFromWatch,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF065F46), Color(0xFF059669)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: const Color(0xFF059669).withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))],
+                ),
+                child: Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.watch_outlined, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Sync from Watch', style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white,
+                    )),
+                    Text('Reads from Health Connect (Samsung, Fitbit, Garmin…)', style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11, color: Colors.white.withValues(alpha: 0.75),
+                    )),
+                  ])),
+                  _syncing
+                    ? const SizedBox(width: 20, height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 14),
+                ]),
+              ),
+            ),
+          ),
+        ),
+        if (_syncMsg != null)
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: _syncMsg!.startsWith('Synced')
+                  ? const Color(0xFFD1FAE5)
+                  : const Color(0xFFFEE2E2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(children: [
+              Icon(
+                _syncMsg!.startsWith('Synced') ? Icons.check_circle_outline : Icons.info_outline,
+                size: 16,
+                color: _syncMsg!.startsWith('Synced') ? const Color(0xFF059669) : AppColors.danger,
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: Text(_syncMsg!, style: GoogleFonts.plusJakartaSans(
+                fontSize: 12, color: _syncMsg!.startsWith('Synced') ? const Color(0xFF065F46) : AppColors.danger,
+              ))),
+              GestureDetector(
+                onTap: () => setState(() => _syncMsg = null),
+                child: const Icon(Icons.close, size: 14, color: AppColors.textMuted),
+              ),
+            ]),
+          ),
         Expanded(child: _loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF059669)))
           : _metrics.isEmpty
             ? EmptyState(
                 icon: Icons.monitor_heart_outlined,
                 title: 'No health data yet',
-                description: 'Connect your Apple Watch or device in the web app to start tracking',
+                description: 'Tap "Sync from Watch" above to pull data from Health Connect',
                 buttonLabel: 'Refresh',
                 onButton: _load,
               )
@@ -100,7 +197,7 @@ class _HealthScreenState extends State<HealthScreen> {
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: Colors.white, borderRadius: BorderRadius.circular(16),
-                          border: _isAlert(m) ? Border.all(color: AppColors.danger.withOpacity(0.5)) : null,
+                          border: _isAlert(m) ? Border.all(color: AppColors.danger.withValues(alpha:0.5)) : null,
                           boxShadow: AppShadows.soft,
                         ),
                         child: Row(children: [
@@ -131,12 +228,12 @@ class _MetricGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = <_MetricItem>[
       if (metric.heartRate != null) _MetricItem(
-        label: 'Heart Rate', value: '${metric.heartRate!.toStringAsFixed(0)}', unit: 'bpm',
+        label: 'Heart Rate', value: metric.heartRate!.toStringAsFixed(0), unit: 'bpm',
         icon: Icons.favorite_outline_rounded,
         alert: metric.heartRate! > 120 || metric.heartRate! < 40,
       ),
       if (metric.spO2 != null) _MetricItem(
-        label: 'Blood Oxygen', value: '${metric.spO2!.toStringAsFixed(0)}', unit: '%',
+        label: 'Blood Oxygen', value: metric.spO2!.toStringAsFixed(0), unit: '%',
         icon: Icons.water_drop_outlined,
         alert: metric.spO2! < 94,
       ),
@@ -169,7 +266,7 @@ class _MetricGrid extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white, borderRadius: BorderRadius.circular(16),
-          border: item.alert ? Border.all(color: AppColors.danger.withOpacity(0.5)) : null,
+          border: item.alert ? Border.all(color: AppColors.danger.withValues(alpha:0.5)) : null,
           boxShadow: AppShadows.soft,
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

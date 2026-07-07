@@ -203,6 +203,9 @@ class ApiService {
   static Future<void> registerFcmToken(String token) =>
       _post('/devices/fcm-token', {'token': token}, auth: true);
 
+  static Future<void> syncHealthConnect(Map<String, dynamic> data) =>
+      _post('/devices/health-connect/sync', data, auth: true);
+
   static Future<Prescription?> getPrescription(String appointmentId) async {
     try {
       final data = await _get('/prescriptions/appointment/$appointmentId');

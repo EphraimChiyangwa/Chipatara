@@ -148,6 +148,41 @@ router.get('/metrics', authMiddleware, async (req, res) => {
   }
 })
 
+// POST /api/devices/health-connect/sync — sync Health Connect data (JWT auth, no device token needed)
+router.post('/health-connect/sync', authMiddleware, async (req, res) => {
+  try {
+    const { heartRate, spO2, steps, temperature, systolic, diastolic, sleepHours } = req.body
+
+    // Find or create a virtual Health Connect device for this user
+    let device = await Device.findOne({ user: req.user.id, type: 'health_connect' })
+    if (!device) {
+      device = new Device({ user: req.user.id, name: 'Health Connect', type: 'health_connect' })
+      await device.save()
+    }
+    device.lastSeen = new Date()
+    await device.save()
+
+    const metricData = { user: req.user.id, device: device._id }
+    if (heartRate != null) metricData.heartRate = heartRate
+    if (spO2 != null) metricData.spO2 = spO2
+    if (steps != null) metricData.steps = steps
+    if (temperature != null) metricData.temperature = temperature
+    if (systolic != null) metricData.systolic = systolic
+    if (diastolic != null) metricData.diastolic = diastolic
+    if (sleepHours != null) metricData.sleepHours = sleepHours
+
+    const metric = new HealthMetric(metricData)
+    await metric.save()
+
+    if (req.io) req.io.to(`health-${req.user.id}`).emit('health-update', metric)
+    checkAndAlert(metric, req.user.id).catch(() => {})
+
+    res.json({ message: 'Health data synced', metric })
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+})
+
 // POST /api/devices/fcm-token — store FCM push token for the logged-in user
 router.post('/fcm-token', authMiddleware, async (req, res) => {
   try {
