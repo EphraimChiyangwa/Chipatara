@@ -6,7 +6,7 @@ import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
-import 'booking_screen.dart';
+import 'doctor_detail_screen.dart';
 import 'health_screen.dart';
 import 'ai_checker_screen.dart';
 
@@ -66,7 +66,7 @@ class _HomeTabState extends State<HomeTab> {
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Good day,', style: GoogleFonts.plusJakartaSans(
-                fontSize: 13, color: Colors.white.withOpacity(0.7),
+                fontSize: 13, color: Colors.white.withValues(alpha:0.7),
               )),
               Text(user?.name.split(' ').first ?? 'there', style: GoogleFonts.plusJakartaSans(
                 fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white,
@@ -75,9 +75,9 @@ class _HomeTabState extends State<HomeTab> {
             Container(
               width: 44, height: 44,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.18),
+                color: Colors.white.withValues(alpha:0.18),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withOpacity(0.25)),
+                border: Border.all(color: Colors.white.withValues(alpha:0.25)),
               ),
               child: const Icon(Icons.person_outline, color: Colors.white),
             ),
@@ -154,7 +154,7 @@ class _HomeTabState extends State<HomeTab> {
           ..._doctors.map((d) => _DoctorCard(
             doctor: d,
             onTap: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => BookingScreen(doctor: d),
+              builder: (_) => DoctorDetailScreen(doctor: d),
             )).then((_) => setState(() {})),
           )),
         ]),
@@ -177,15 +177,15 @@ class _QuickAction extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
+          color: Colors.white.withValues(alpha:0.15),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(0.2)),
+          border: Border.all(color: Colors.white.withValues(alpha:0.2)),
         ),
         child: Column(children: [
           Icon(icon, color: Colors.white, size: 22),
           const SizedBox(height: 4),
           Text(label, style: GoogleFonts.plusJakartaSans(
-            fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white.withOpacity(0.9),
+            fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white.withValues(alpha:0.9),
           )),
         ]),
       ),

@@ -6,6 +6,7 @@ import '../../config/constants.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
+import 'appointment_detail_screen.dart';
 
 class AppointmentsTab extends StatefulWidget {
   const AppointmentsTab({super.key});
@@ -83,6 +84,12 @@ class _AppointmentsTabState extends State<AppointmentsTab> {
                   appt: _appointments[i],
                   statusColor: _statusColor(_appointments[i].status),
                   statusIcon: _statusIcon(_appointments[i].status),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => AppointmentDetailScreen(
+                      appointment: _appointments[i],
+                      onRefresh: _load,
+                    ),
+                  )),
                   onCancel: () async {
                     await ApiService.cancelAppointment(_appointments[i].id);
                     _load();
@@ -109,19 +116,23 @@ class _ApptCard extends StatelessWidget {
   final Appointment appt;
   final Color statusColor;
   final IconData statusIcon;
+  final VoidCallback onTap;
   final VoidCallback onCancel;
   final VoidCallback onRate;
   final VoidCallback onViewRx;
 
   const _ApptCard({
     required this.appt, required this.statusColor, required this.statusIcon,
-    required this.onCancel, required this.onRate, required this.onViewRx,
+    required this.onTap, required this.onCancel, required this.onRate,
+    required this.onViewRx,
   });
 
   @override
   Widget build(BuildContext context) {
     final date = DateTime.tryParse(appt.date);
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: Colors.white, borderRadius: BorderRadius.circular(20),
@@ -132,7 +143,7 @@ class _ApptCard extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: statusColor.withOpacity(0.08),
+            color: statusColor.withValues(alpha:0.08),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Row(children: [
@@ -231,6 +242,7 @@ class _ApptCard extends StatelessWidget {
           ]),
         ),
       ]),
+      ),
     );
   }
 }

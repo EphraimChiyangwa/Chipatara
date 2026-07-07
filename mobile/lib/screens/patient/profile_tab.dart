@@ -5,6 +5,7 @@ import '../../config/constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
+import 'medical_profile_screen.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -127,6 +128,29 @@ class _ProfileTabState extends State<ProfileTab> {
                   ),
                 ),
               ])),
+            ]),
+          ),
+          const SizedBox(height: 16),
+
+          // Medical profile
+          _SectionCard(
+            icon: Icons.health_and_safety_outlined,
+            title: 'My Health Info',
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(
+                'Blood type, allergies, chronic conditions and emergency contact — shared with your doctor.',
+                style: GoogleFonts.plusJakartaSans(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              AppButton(
+                label: 'Edit Health Info',
+                icon: Icons.edit_outlined,
+                color: AppColors.primaryLight,
+                textColor: AppColors.primary,
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => const MedicalProfileScreen(),
+                )),
+              ),
             ]),
           ),
           const SizedBox(height: 16),
