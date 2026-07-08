@@ -6,6 +6,7 @@ import '../../config/constants.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
+import 'reschedule_screen.dart';
 
 class AppointmentDetailScreen extends StatefulWidget {
   final Appointment appointment;
@@ -48,10 +49,12 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
       widget.onRefresh();
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')),
           backgroundColor: AppColors.danger),
       );
+      }
     }
   }
 
@@ -284,6 +287,24 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                   Uri.parse('https://meet.jit.si/chipatara-${_appt.id}'),
                   mode: LaunchMode.externalApplication,
                 ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (_appt.status == 'pending' || _appt.status == 'confirmed') ...[
+              AppButton(
+                label: 'Reschedule',
+                icon: Icons.event_repeat_outlined,
+                color: const Color(0xFFF5F3FF),
+                textColor: const Color(0xFF7C3AED),
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => RescheduleScreen(
+                    appointment: _appt,
+                    onRescheduled: () {
+                      widget.onRefresh();
+                      Navigator.pop(context);
+                    },
+                  ),
+                )),
               ),
               const SizedBox(height: 10),
             ],

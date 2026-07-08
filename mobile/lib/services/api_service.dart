@@ -125,6 +125,9 @@ class ApiService {
   static Future<void> cancelAppointment(String id) =>
       _put('/appointments/$id/cancel', {});
 
+  static Future<void> rescheduleAppointment(String id, DateTime date) =>
+      _put('/appointments/$id/reschedule', {'date': date.toIso8601String()});
+
   static Future<void> updateAppointmentStatus(String id, String status) =>
       _put('/appointments/$id/status', {'status': status});
 
