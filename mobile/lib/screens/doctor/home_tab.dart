@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../config/constants.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
 import '../chat_screen.dart';
+import '../patient/video_call_screen.dart';
 
 class DoctorHomeTab extends StatefulWidget {
   const DoctorHomeTab({super.key});
@@ -66,7 +66,7 @@ class _DoctorHomeTabState extends State<DoctorHomeTab> {
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Welcome back,', style: GoogleFonts.plusJakartaSans(
-                fontSize: 13, color: Colors.white.withOpacity(0.7),
+                fontSize: 13, color: Colors.white.withValues(alpha: 0.7),
               )),
               Text('Dr. ${user?.name.split(' ').last ?? ''}', style: GoogleFonts.plusJakartaSans(
                 fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white,
@@ -75,9 +75,9 @@ class _DoctorHomeTabState extends State<DoctorHomeTab> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withOpacity(0.3)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
               ),
               child: Text('Online', style: GoogleFonts.plusJakartaSans(
                 fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white,
@@ -123,7 +123,7 @@ class _DoctorHomeTabState extends State<DoctorHomeTab> {
             child: _filtered.isEmpty
               ? ListView(children: [EmptyState(
                   icon: Icons.event_available_outlined,
-                  title: 'No ${_filter} appointments',
+                  title: 'No $_filter appointments',
                   description: 'Nothing here right now',
                 )])
               : ListView.builder(
@@ -227,10 +227,9 @@ class _ApptCard extends StatelessWidget {
               label: 'Join Video',
               color: AppColors.success,
               icon: Icons.videocam_outlined,
-              onTap: () => launchUrl(
-                Uri.parse('https://meet.jit.si/chipatara-${appt.id}'),
-                mode: LaunchMode.externalApplication,
-              ),
+              onTap: () => Navigator.push(context, MaterialPageRoute(
+                builder: (_) => VideoCallScreen(appointment: appt),
+              )),
             )),
             const SizedBox(width: 8),
             Expanded(child: _ActionBtn(label: 'Chat', color: AppColors.primary, icon: Icons.chat_bubble_outline, onTap: onChat)),

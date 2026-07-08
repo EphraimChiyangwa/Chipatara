@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../config/constants.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
 import 'reschedule_screen.dart';
+import 'video_call_screen.dart';
 
 class AppointmentDetailScreen extends StatefulWidget {
   final Appointment appointment;
@@ -283,10 +283,9 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                 label: 'Join Video Call',
                 icon: Icons.videocam_outlined,
                 color: AppColors.success,
-                onTap: () => launchUrl(
-                  Uri.parse('https://meet.jit.si/chipatara-${_appt.id}'),
-                  mode: LaunchMode.externalApplication,
-                ),
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => VideoCallScreen(appointment: _appt),
+                )),
               ),
               const SizedBox(height: 10),
             ],
