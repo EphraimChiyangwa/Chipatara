@@ -166,6 +166,9 @@ class ApiService {
       _put('/medical-profile', data);
 
   // ── Doctor profile ────────────────────────────────────────────
+  static Future<Map<String, dynamic>> getDoctorStats() async =>
+      await _get('/doctors/stats') as Map<String, dynamic>;
+
   static Future<DoctorProfile?> getMyDoctorProfile() async {
     try {
       final data = await _get('/doctors/me');

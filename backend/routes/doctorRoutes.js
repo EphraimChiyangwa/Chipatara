@@ -136,4 +136,74 @@ router.get("/specializations", async (req, res) => {
   }
 });
 
+// GET /api/doctors/stats — earnings & performance stats for logged-in doctor
+router.get('/stats', authMiddleware, roleMiddleware('doctor'), async (req, res) => {
+  try {
+    const doctorProfile = await Doctor.findOne({ user: req.user.id }).lean();
+    const fee = doctorProfile?.consultationFee ?? 0;
+
+    const appointments = await Appointment.find({ doctor: req.user.id })
+      .populate('patient', 'name')
+      .lean();
+
+    const completed  = appointments.filter(a => a.status === 'completed');
+    const pending    = appointments.filter(a => a.status === 'pending');
+    const confirmed  = appointments.filter(a => a.status === 'confirmed');
+    const cancelled  = appointments.filter(a => a.status === 'cancelled');
+    const paid       = completed.filter(a => a.paid);
+
+    // Ratings
+    const rated = completed.filter(a => a.rating != null);
+    const avgRating = rated.length
+      ? +(rated.reduce((s, a) => s + a.rating, 0) / rated.length).toFixed(1)
+      : null;
+
+    // Monthly earnings — last 6 months
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() - i);
+      const label = d.toLocaleString('default', { month: 'short' });
+      const year  = d.getFullYear();
+      const month = d.getMonth();
+      const count = paid.filter(a => {
+        const ad = new Date(a.date);
+        return ad.getFullYear() === year && ad.getMonth() === month;
+      }).length;
+      months.push({ month: label, earnings: count * fee, count });
+    }
+
+    // Recent completed appointments (last 8)
+    const recent = completed
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 8)
+      .map(a => ({
+        id: a._id,
+        patientName: a.patient?.name ?? 'Patient',
+        date: a.date,
+        paid: a.paid,
+        fee,
+        rating: a.rating,
+      }));
+
+    res.json({
+      totalEarnings: paid.length * fee,
+      pendingEarnings: completed.filter(a => !a.paid).length * fee,
+      completedCount: completed.length,
+      pendingCount: pending.length,
+      confirmedCount: confirmed.length,
+      cancelledCount: cancelled.length,
+      totalAppointments: appointments.length,
+      averageRating: avgRating,
+      totalRatings: rated.length,
+      consultationFee: fee,
+      monthlyEarnings: months,
+      recentCompleted: recent,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
