@@ -100,6 +100,11 @@ class ApiService {
   static Future<void> deleteAvailabilitySlot(String id) => _delete('/availability/$id');
 
   // ── Appointments ──────────────────────────────────────────────
+  static Future<Appointment> getAppointmentById(String id) async {
+    final data = await _get('/appointments/$id') as Map<String, dynamic>;
+    return Appointment.fromJson(data);
+  }
+
   static Future<List<Appointment>> getPatientAppointments() async {
     final data = await _get('/appointments/patient') as List;
     return data.map((a) => Appointment.fromJson(a)).toList();

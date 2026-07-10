@@ -91,7 +91,8 @@ exports.bookAppointment = async (req, res) => {
         sendPushNotification(
           doctor.fcmToken,
           'New Appointment Request 📅',
-          `${patient.name} has booked an appointment with you.`
+          `${patient.name} has booked an appointment with you.`,
+          { type: 'appointment', appointmentId: appointment._id.toString() }
         );
       }
     }
@@ -148,7 +149,8 @@ exports.updateAppointmentStatus = async (req, res) => {
         cancelled: `Dr. ${appointment.doctor.name} cancelled your appointment.`,
         completed: `Your consultation with Dr. ${appointment.doctor.name} is complete.`,
       };
-      sendPushNotification(patientFull.fcmToken, titles[status], bodies[status]);
+      sendPushNotification(patientFull.fcmToken, titles[status], bodies[status],
+        { type: 'appointment', appointmentId: appointment._id.toString() });
     }
 
     res.json({ message: `Appointment ${status} successfully.`, appointment });

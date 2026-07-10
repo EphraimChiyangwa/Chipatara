@@ -11,6 +11,8 @@ import 'screens/patient/patient_shell.dart';
 import 'screens/doctor/doctor_shell.dart';
 import 'services/notification_service.dart';
 
+final navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
@@ -23,7 +25,7 @@ void main() async {
   // Wrapped in try-catch so the app still launches if Firebase is not yet configured.
   try {
     await Firebase.initializeApp();
-    await NotificationService.init();
+    await NotificationService.init(navigatorKey);
   } catch (_) {}
 
   runApp(
@@ -40,6 +42,7 @@ class ChipataraApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Chipatara',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

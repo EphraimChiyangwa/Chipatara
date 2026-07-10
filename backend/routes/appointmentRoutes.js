@@ -146,4 +146,22 @@ router.put("/:id/reschedule", authMiddleware, async (req, res) => {
   }
 });
 
+// GET /:id — fetch a single appointment (patient or doctor who owns it)
+router.get("/:id", authMiddleware, async (req, res) => {
+  try {
+    const appt = await Appointment.findById(req.params.id)
+      .populate("doctor", "name email")
+      .populate("patient", "name email")
+      .lean();
+    if (!appt) return res.status(404).json({ message: "Appointment not found." });
+    const uid = req.user.id;
+    if (appt.patient._id.toString() !== uid && appt.doctor._id.toString() !== uid) {
+      return res.status(403).json({ message: "Not authorized." });
+    }
+    res.json(appt);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;

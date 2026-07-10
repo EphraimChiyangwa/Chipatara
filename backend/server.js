@@ -138,7 +138,8 @@ io.on('connection', (socket) => {
       User.findById(recipientId).select('fcmToken').lean().then((recipient) => {
         if (recipient?.fcmToken) {
           const senderName = msg.sender?.name ?? 'New message'
-          sendPushNotification(recipient.fcmToken, senderName, text.trim().slice(0, 100))
+          sendPushNotification(recipient.fcmToken, senderName, text.trim().slice(0, 100),
+              { type: 'chat', appointmentId })
         }
       }).catch(() => {})
     } catch { /* ignore */ }
