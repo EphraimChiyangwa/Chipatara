@@ -6,9 +6,11 @@ import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
+import 'ai_checker_screen.dart';
 import 'doctor_detail_screen.dart';
 import 'health_screen.dart';
-import 'ai_checker_screen.dart';
+import 'notification_inbox_screen.dart';
+import 'prescriptions_screen.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -72,14 +74,18 @@ class _HomeTabState extends State<HomeTab> {
                 fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white,
               )),
             ]),
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha:0.18),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withValues(alpha:0.25)),
+            GestureDetector(
+              onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const NotificationInboxScreen())),
+              child: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                ),
+                child: const Icon(Icons.notifications_outlined, color: Colors.white),
               ),
-              child: const Icon(Icons.person_outline, color: Colors.white),
             ),
           ]),
           const SizedBox(height: 20),
@@ -91,9 +97,11 @@ class _HomeTabState extends State<HomeTab> {
             _QuickAction(icon: Icons.psychology_outlined, label: 'AI Check', onTap: () =>
               Navigator.push(context, MaterialPageRoute(builder: (_) => const AiCheckerScreen()))),
             const SizedBox(width: 10),
-            _QuickAction(icon: Icons.videocam_outlined, label: 'Video', onTap: () {}),
+            _QuickAction(icon: Icons.medication_outlined, label: 'Prescriptions', onTap: () =>
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const PrescriptionsScreen()))),
             const SizedBox(width: 10),
-            _QuickAction(icon: Icons.emergency_outlined, label: 'Emergency', onTap: () {}),
+            _QuickAction(icon: Icons.notifications_outlined, label: 'Notifications', onTap: () =>
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationInboxScreen()))),
           ]),
         ]),
       ),

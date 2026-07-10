@@ -73,10 +73,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
       );
       if (mounted) setState(() => _success = true);
     } catch (e) {
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _verifying = false;
         _error = e.toString().replaceAll('Exception: ', '');
       });
+      }
     }
   }
 

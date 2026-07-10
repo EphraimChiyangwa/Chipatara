@@ -210,21 +210,32 @@ class Medication {
 class Prescription {
   final String id;
   final dynamic doctor;
+  final dynamic appointment;
   final List<Medication> medications;
   final String notes;
   final DateTime createdAt;
 
   Prescription({
     required this.id, required this.doctor,
+    this.appointment,
     required this.medications, required this.notes,
     required this.createdAt,
   });
 
   String get doctorName => doctor is Map ? (doctor['name'] ?? 'Doctor') : 'Doctor';
+  String get appointmentReason => appointment is Map ? ((appointment as Map)['reason'] ?? '') : '';
+  DateTime? get appointmentDate {
+    if (appointment is Map) {
+      final d = (appointment as Map)['date'];
+      if (d != null) return DateTime.tryParse(d.toString());
+    }
+    return null;
+  }
 
   factory Prescription.fromJson(Map<String, dynamic> j) => Prescription(
     id: j['_id'] ?? '',
     doctor: j['doctor'],
+    appointment: j['appointment'],
     medications: (j['medications'] as List? ?? [])
         .map((m) => Medication.fromJson(m as Map<String, dynamic>))
         .toList(),

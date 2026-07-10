@@ -42,7 +42,7 @@ class GradientHeader extends StatelessWidget {
           width: 180, height: 180,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: RadialGradient(colors: [Colors.white.withOpacity(0.08), Colors.transparent]),
+            gradient: RadialGradient(colors: [Colors.white.withValues(alpha: 0.08), Colors.transparent]),
           ),
         )),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -52,9 +52,9 @@ class GradientHeader extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.18),
+                  color: Colors.white.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.3)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
                 ),
                 child: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 16),
               ),
@@ -63,7 +63,7 @@ class GradientHeader extends StatelessWidget {
           ],
           Text(eyebrow, style: GoogleFonts.plusJakartaSans(
             fontSize: 11, fontWeight: FontWeight.w600,
-            color: Colors.white.withOpacity(0.6),
+            color: Colors.white.withValues(alpha: 0.6),
             letterSpacing: 1.4,
           )),
           const SizedBox(height: 4),
@@ -71,12 +71,12 @@ class GradientHeader extends StatelessWidget {
             Expanded(child: Text(title, style: GoogleFonts.plusJakartaSans(
               fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white, height: 1.2,
             ))),
-            if (trailing != null) trailing!,
+            ?trailing,
           ]),
           if (subtitle != null) ...[
             const SizedBox(height: 4),
             Text(subtitle!, style: GoogleFonts.plusJakartaSans(
-              fontSize: 13, color: Colors.white.withOpacity(0.65),
+              fontSize: 13, color: Colors.white.withValues(alpha: 0.65),
             )),
           ],
         ]),
@@ -198,18 +198,18 @@ class StatChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.25)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
       ),
       child: Column(children: [
-        if (icon != null) Icon(icon, color: Colors.white.withOpacity(0.8), size: 16),
+        if (icon != null) Icon(icon, color: Colors.white.withValues(alpha: 0.8), size: 16),
         if (icon != null) const SizedBox(height: 2),
         Text(value, style: GoogleFonts.plusJakartaSans(
           fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white,
         )),
         Text(label, style: GoogleFonts.plusJakartaSans(
-          fontSize: 10, color: Colors.white.withOpacity(0.7),
+          fontSize: 10, color: Colors.white.withValues(alpha: 0.7),
         )),
       ]),
     );
@@ -306,7 +306,7 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _anim,
-      builder: (_, __) => Container(
+      builder: (_, _) => Container(
         width: widget.width, height: widget.height,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(widget.radius),

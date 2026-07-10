@@ -49,9 +49,11 @@ class _DoctorAvailabilityTabState extends State<DoctorAvailabilityTab> {
       await ApiService.deleteAvailabilitySlot(slot.id);
       setState(() => _slots.remove(slot));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
       );
+      }
     }
   }
 

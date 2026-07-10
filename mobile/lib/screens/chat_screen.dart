@@ -114,7 +114,7 @@ class _ChatScreenState extends State<ChatScreen> {
               icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
             ),
             CircleAvatar(
-              backgroundColor: Colors.white.withOpacity(0.2),
+              backgroundColor: Colors.white.withValues(alpha: 0.2),
               child: Text(other.isNotEmpty ? other[0] : '?', style: GoogleFonts.plusJakartaSans(
                 fontWeight: FontWeight.w800, color: Colors.white,
               )),
@@ -125,7 +125,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 fontWeight: FontWeight.w700, color: Colors.white, fontSize: 15,
               )),
               Text('Secure consultation', style: GoogleFonts.plusJakartaSans(
-                fontSize: 11, color: Colors.white.withOpacity(0.7),
+                fontSize: 11, color: Colors.white.withValues(alpha: 0.7),
               )),
             ])),
           ]),
@@ -221,7 +221,7 @@ class _Bubble extends StatelessWidget {
           Text(
             DateFormat('h:mm a').format(msg.createdAt),
             style: GoogleFonts.plusJakartaSans(
-              fontSize: 10, color: isMine ? Colors.white.withOpacity(0.6) : AppColors.textMuted,
+              fontSize: 10, color: isMine ? Colors.white.withValues(alpha: 0.6) : AppColors.textMuted,
             ),
           ),
         ]),

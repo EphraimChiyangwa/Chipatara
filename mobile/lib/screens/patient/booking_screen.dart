@@ -72,9 +72,11 @@ class _BookingScreenState extends State<BookingScreen> {
         if (mounted) setState(() => _success = true);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: AppColors.danger),
       );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -82,10 +84,12 @@ class _BookingScreenState extends State<BookingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_success) return _SuccessScreen(
+    if (_success) {
+      return _SuccessScreen(
       doctorName: widget.doctor.name,
       onDone: () => Navigator.pop(context),
     );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -142,7 +146,7 @@ class _BookingScreenState extends State<BookingScreen> {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: AppColors.primaryLight, borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                 ),
                 child: Row(children: [
                   const Icon(Icons.calendar_month_outlined, color: AppColors.primary),

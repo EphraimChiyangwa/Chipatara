@@ -60,7 +60,7 @@ class _FloatingNav extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.15),
+            color: AppColors.primary.withValues(alpha: 0.15),
             blurRadius: 24, offset: const Offset(0, 8),
           ),
           const BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),

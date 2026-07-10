@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/chat_screen.dart';
 import '../screens/patient/appointment_detail_screen.dart';
 import 'api_service.dart';
@@ -50,6 +51,7 @@ class NotificationService {
     FirebaseMessaging.onMessage.listen((msg) {
       final n = msg.notification;
       if (n == null) return;
+      _saveToInbox(n.title ?? '', n.body ?? '', msg.data);
       _local.show(
         n.hashCode,
         n.title,
@@ -67,6 +69,8 @@ class NotificationService {
 
     // Background: notification tapped, app was running
     FirebaseMessaging.onMessageOpenedApp.listen((msg) {
+      final n = msg.notification;
+      if (n != null) _saveToInbox(n.title ?? '', n.body ?? '', msg.data);
       _navigate(msg.data['type'], msg.data['appointmentId']);
     });
 
@@ -81,6 +85,41 @@ class NotificationService {
 
     await _registerToken();
     _messaging.onTokenRefresh.listen(_sendToken);
+  }
+
+  static const _inboxKey = 'notification_inbox';
+
+  static Future<void> _saveToInbox(
+      String title, String body, Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList(_inboxKey) ?? [];
+      final entry = jsonEncode({
+        'title': title,
+        'body': body,
+        'type': data['type'] ?? 'general',
+        'appointmentId': data['appointmentId'],
+        'time': DateTime.now().toIso8601String(),
+      });
+      raw.insert(0, entry);
+      // keep last 50
+      await prefs.setStringList(_inboxKey, raw.take(50).toList());
+    } catch (_) {}
+  }
+
+  static Future<List<Map<String, dynamic>>> getInbox() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList(_inboxKey) ?? [];
+      return raw
+          .map((s) => jsonDecode(s) as Map<String, dynamic>)
+          .toList();
+    } catch (_) { return []; }
+  }
+
+  static Future<void> clearInbox() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_inboxKey);
   }
 
   static Future<void> _navigate(String? type, String? appointmentId) async {

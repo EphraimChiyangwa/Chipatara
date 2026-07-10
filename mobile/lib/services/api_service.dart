@@ -82,6 +82,11 @@ class ApiService {
     return data.map((d) => Doctor.fromJson(d)).toList();
   }
 
+  static Future<List<Map<String, dynamic>>> getDoctorReviews(String doctorId) async {
+    final data = await _get('/doctors/$doctorId/reviews') as List;
+    return data.cast<Map<String, dynamic>>();
+  }
+
   static Future<List<String>> getSpecializations() async {
     final data = await _get('/doctors/specializations') as List;
     return data.cast<String>();
@@ -223,5 +228,10 @@ class ApiService {
       if (data == null) return null;
       return Prescription.fromJson(data as Map<String, dynamic>);
     } catch (_) { return null; }
+  }
+
+  static Future<List<Prescription>> getMyPrescriptions() async {
+    final data = await _get('/prescriptions/my') as List;
+    return data.map((p) => Prescription.fromJson(p as Map<String, dynamic>)).toList();
   }
 }

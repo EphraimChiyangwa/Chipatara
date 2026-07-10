@@ -206,4 +206,29 @@ router.get('/stats', authMiddleware, roleMiddleware('doctor'), async (req, res) 
   }
 });
 
+// GET /api/doctors/:id/reviews — public list of rated reviews for a doctor
+router.get('/:id/reviews', async (req, res) => {
+  try {
+    const reviews = await Appointment.find({
+      doctor: req.params.id,
+      rating: { $gt: 0 },
+    })
+      .populate('patient', 'name')
+      .select('rating review patient date')
+      .sort({ updatedAt: -1 })
+      .limit(20)
+      .lean()
+
+    res.json(reviews.map(r => ({
+      id: r._id,
+      rating: r.rating,
+      review: r.review || '',
+      patientName: r.patient?.name ?? 'Patient',
+      date: r.date,
+    })))
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
 module.exports = router;

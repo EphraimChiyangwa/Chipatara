@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-// Change this to your PC's local IP when testing on a real device
-// For Android emulator use: http://10.0.2.2:5000/api
-const String kBaseUrl = 'http://10.0.2.2:5000/api';
-const String kSocketUrl = 'http://10.0.2.2:5000';
+// Android emulator: http://10.0.2.2:5000/api
+// Physical device on same WiFi: http://10.100.160.109:5000/api
+const String kBaseUrl = 'http://10.100.160.109:5000/api';
+const String kSocketUrl = 'http://10.100.160.109:5000';
 
 class AppColors {
   static const primary       = Color(0xFF3B5BDB);
@@ -26,10 +26,10 @@ class AppColors {
 
 class AppShadows {
   static final soft = [
-    BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 16, offset: const Offset(0, 4)),
+    BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4)),
   ];
   static final card = [
-    BoxShadow(color: const Color(0xFF3B5BDB).withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 4)),
-    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
+    BoxShadow(color: const Color(0xFF3B5BDB).withValues(alpha: 0.06), blurRadius: 20, offset: const Offset(0, 4)),
+    BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
   ];
 }
