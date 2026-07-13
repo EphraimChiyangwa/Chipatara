@@ -24,12 +24,13 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _restore() async {
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString('token');
-    final name  = prefs.getString('userName');
-    final email = prefs.getString('userEmail');
-    final role  = prefs.getString('userRole');
-    final id    = prefs.getString('userId');
+    final name   = prefs.getString('userName');
+    final email  = prefs.getString('userEmail');
+    final role   = prefs.getString('userRole');
+    final id     = prefs.getString('userId');
+    final avatar = prefs.getString('userAvatar');
     if (_token != null && id != null) {
-      _user = User(id: id, name: name ?? '', email: email ?? '', role: role ?? 'patient');
+      _user = User(id: id, name: name ?? '', email: email ?? '', role: role ?? 'patient', avatar: avatar);
     }
     _loading = false;
     notifyListeners();
@@ -47,23 +48,40 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _saveSession(Map<String, dynamic> res) async {
     _token = res['token'];
-    final userData = res['user'];
-    _user = User.fromJson(userData);
+    _user = User.fromJson(res['user']);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('token', _token!);
-    await prefs.setString('userId', _user!.id);
-    await prefs.setString('userName', _user!.name);
-    await prefs.setString('userEmail', _user!.email);
-    await prefs.setString('userRole', _user!.role);
+    await _persistUser(prefs, _user!);
     notifyListeners();
   }
 
+  Future<void> _persistUser(SharedPreferences prefs, User u) async {
+    await prefs.setString('userId', u.id);
+    await prefs.setString('userName', u.name);
+    await prefs.setString('userEmail', u.email);
+    await prefs.setString('userRole', u.role);
+    if (u.avatar != null) {
+      await prefs.setString('userAvatar', u.avatar!);
+    } else {
+      await prefs.remove('userAvatar');
+    }
+  }
+
   Future<void> updateName(String name) async {
-    final res = await ApiService.updateProfile(name);
+    final res = await ApiService.updateProfile(name: name);
     final updated = User.fromJson(res['user']);
     _user = updated;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('userName', updated.name);
+    await _persistUser(prefs, updated);
+    notifyListeners();
+  }
+
+  Future<void> updateAvatar(String? base64Avatar) async {
+    final res = await ApiService.updateProfile(avatar: base64Avatar);
+    final updated = User.fromJson(res['user']);
+    _user = updated;
+    final prefs = await SharedPreferences.getInstance();
+    await _persistUser(prefs, updated);
     notifyListeners();
   }
 

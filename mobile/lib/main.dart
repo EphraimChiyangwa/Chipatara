@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'config/constants.dart';
 import 'providers/auth_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'screens/patient/patient_shell.dart';
 import 'screens/doctor/doctor_shell.dart';
 import 'services/notification_service.dart';
@@ -86,18 +88,34 @@ class ChipataraApp extends StatelessWidget {
 class _Root extends StatelessWidget {
   const _Root();
 
+  static final _prefsF = SharedPreferences.getInstance();
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
-      builder: (_, auth, _) {
+      builder: (context, auth, _) {
         if (auth.isLoading) {
           return const Scaffold(
             backgroundColor: AppColors.surface,
             body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
           );
         }
-        if (!auth.isLoggedIn) return const LoginScreen();
-        return auth.user?.role == 'doctor' ? const DoctorShell() : const PatientShell();
+        if (auth.isLoggedIn) {
+          return auth.user?.role == 'doctor' ? const DoctorShell() : const PatientShell();
+        }
+        return FutureBuilder<SharedPreferences>(
+          future: _prefsF,
+          builder: (_, snap) {
+            if (!snap.hasData) {
+              return const Scaffold(
+                backgroundColor: AppColors.surface,
+                body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+              );
+            }
+            final done = snap.data!.getBool('onboarding_complete') ?? false;
+            return done ? const LoginScreen() : const OnboardingScreen();
+          },
+        );
       },
     );
   }

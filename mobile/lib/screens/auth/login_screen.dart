@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../widgets/widgets.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
+import '../terms_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -113,6 +114,22 @@ class _LoginScreenState extends State<LoginScreen> {
               )],
             )),
           )),
+          const SizedBox(height: 16),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TermsScreen())),
+              child: Text('Terms of Service', style: GoogleFonts.plusJakartaSans(
+                fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600,
+              )),
+            ),
+            Text('  ·  ', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.textMuted)),
+            GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen())),
+              child: Text('Privacy Policy', style: GoogleFonts.plusJakartaSans(
+                fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600,
+              )),
+            ),
+          ]),
         ]),
       )),
     );

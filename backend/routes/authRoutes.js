@@ -36,7 +36,7 @@ router.post("/register", async (req, res) => {
     res.status(201).json({
       message: "User registered successfully",
       token,
-      user: { id: newUser._id, name: newUser.name, email: newUser.email, role: newUser.role }
+      user: { id: newUser._id, name: newUser.name, email: newUser.email, role: newUser.role, avatar: newUser.avatar }
     });
 
   } catch (error) {
@@ -70,7 +70,7 @@ router.post("/login", async (req, res) => {
     res.json({
       message: "Login successful",
       token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role }
+      user: { id: user._id, name: user.name, email: user.email, role: user.role, avatar: user.avatar }
     });
 
   } catch (error) {
@@ -116,17 +116,16 @@ router.put("/change-password", authMiddleware, async (req, res) => {
   }
 });
 
-// PUT /api/auth/profile — update display name
+// PUT /api/auth/profile — update display name and/or avatar (base64 data URI)
 router.put("/profile", authMiddleware, async (req, res) => {
   try {
-    const { name } = req.body;
-    if (!name?.trim()) return res.status(400).json({ message: "Name is required." });
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
-      { name: name.trim() },
-      { new: true }
-    ).select("-password");
-    res.json({ message: "Profile updated.", user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+    const { name, avatar } = req.body;
+    const update = {};
+    if (name?.trim()) update.name = name.trim();
+    if (avatar !== undefined) update.avatar = avatar; // null clears it
+    if (!Object.keys(update).length) return res.status(400).json({ message: "Nothing to update." });
+    const user = await User.findByIdAndUpdate(req.user.id, update, { new: true }).select("-password");
+    res.json({ message: "Profile updated.", user: { id: user._id, name: user.name, email: user.email, role: user.role, avatar: user.avatar } });
   } catch (error) {
     res.status(500).json({ message: "Server error" });
   }

@@ -9,6 +9,7 @@ import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
 import '../chat_screen.dart';
 import '../patient/video_call_screen.dart';
+import 'patient_health_data_screen.dart';
 
 class DoctorHomeTab extends StatefulWidget {
   const DoctorHomeTab({super.key});
@@ -239,6 +240,25 @@ class _ApptCard extends StatelessWidget {
             Expanded(child: _ActionBtn(label: 'Prescribe', color: AppColors.primary, icon: Icons.medication_outlined, onTap: onPrescribe)),
           ],
         ]),
+        if (appt.status == 'confirmed' || appt.status == 'completed') ...[
+          const SizedBox(height: 8),
+          _ActionBtn(
+            label: 'View Health Data',
+            color: const Color(0xFF0891B2),
+            icon: Icons.monitor_heart_outlined,
+            onTap: () {
+              final patientId = appt.patient is Map
+                  ? (appt.patient['_id'] ?? appt.patient['id'] ?? '')
+                  : '';
+              Navigator.push(context, MaterialPageRoute(
+                builder: (_) => PatientHealthDataScreen(
+                  patientId: patientId,
+                  patientName: appt.patientName,
+                ),
+              ));
+            },
+          ),
+        ],
       ]),
     );
   }

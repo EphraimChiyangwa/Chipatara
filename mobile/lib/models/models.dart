@@ -3,14 +3,16 @@ class User {
   final String name;
   final String email;
   final String role;
+  final String? avatar;
 
-  User({required this.id, required this.name, required this.email, required this.role});
+  User({required this.id, required this.name, required this.email, required this.role, this.avatar});
 
   factory User.fromJson(Map<String, dynamic> j) => User(
     id: j['id'] ?? j['_id'] ?? '',
     name: j['name'] ?? '',
     email: j['email'] ?? '',
     role: j['role'] ?? 'patient',
+    avatar: j['avatar'] as String?,
   );
 }
 

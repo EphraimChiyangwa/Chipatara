@@ -27,6 +27,11 @@ const UserSchema = new mongoose.Schema({
   fcmToken: {
     type: String,
     default: null
+  },
+
+  avatar: {
+    type: String,
+    default: null
   }
 
 });

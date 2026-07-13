@@ -67,8 +67,12 @@ class ApiService {
   static Future<void> changePassword(String current, String next) =>
       _put('/auth/change-password', {'currentPassword': current, 'newPassword': next});
 
-  static Future<Map<String, dynamic>> updateProfile(String name) async =>
-      await _put('/auth/profile', {'name': name}) as Map<String, dynamic>;
+  static Future<Map<String, dynamic>> updateProfile({String? name, String? avatar}) async {
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (avatar != null) body['avatar'] = avatar;
+    return await _put('/auth/profile', body) as Map<String, dynamic>;
+  }
 
   static Future<void> forgotPassword(String email) =>
       _post('/auth/forgot-password', {'email': email});
@@ -147,6 +151,11 @@ class ApiService {
   // ── Health metrics ────────────────────────────────────────────
   static Future<List<HealthMetric>> getMyHealthMetrics() async {
     final data = await _get('/devices/metrics') as List;
+    return data.map((m) => HealthMetric.fromJson(m)).toList();
+  }
+
+  static Future<List<HealthMetric>> getPatientHealthMetrics(String patientId) async {
+    final data = await _get('/devices/metrics/$patientId') as List;
     return data.map((m) => HealthMetric.fromJson(m)).toList();
   }
 

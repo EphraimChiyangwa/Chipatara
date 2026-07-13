@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../config/constants.dart';
+import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
@@ -15,6 +18,9 @@ class ProfileTab extends StatefulWidget {
 }
 
 class _ProfileTabState extends State<ProfileTab> {
+  // Avatar
+  bool _avatarLoading = false;
+
   // Edit name
   final _nameCtrl = TextEditingController();
   bool _nameLoading = false;
@@ -47,6 +53,86 @@ class _ProfileTabState extends State<ProfileTab> {
       setState(() => _nameLoading = false);
     }
   }
+
+  Future<void> _pickAvatar() async {
+    final img = await ImagePicker().pickImage(
+      source: ImageSource.gallery, imageQuality: 70, maxWidth: 400,
+    );
+    if (img == null || !mounted) return;
+    final bytes = await img.readAsBytes();
+    final dataUri = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+    setState(() => _avatarLoading = true);
+    final auth = context.read<AuthProvider>();
+    try {
+      await auth.updateAvatar(dataUri);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: AppColors.danger),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _avatarLoading = false);
+    }
+  }
+
+  Widget _buildAvatarWidget(User? user) {
+    final av = user?.avatar;
+    Widget inner;
+    if (av != null && av.contains(',')) {
+      try {
+        final bytes = base64Decode(av.split(',').last);
+        inner = ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Image.memory(bytes, width: 64, height: 64, fit: BoxFit.cover),
+        );
+      } catch (_) {
+        inner = _avatarInitial(user);
+      }
+    } else {
+      inner = _avatarInitial(user);
+    }
+    return GestureDetector(
+      onTap: _pickAvatar,
+      child: Stack(children: [
+        SizedBox(width: 64, height: 64, child: inner),
+        if (_avatarLoading)
+          Container(
+            width: 64, height: 64,
+            decoration: BoxDecoration(
+              color: Colors.black38, borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Center(child: SizedBox(
+              width: 24, height: 24,
+              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+            )),
+          ),
+        Positioned(
+          bottom: 0, right: 0,
+          child: Container(
+            width: 22, height: 22,
+            decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+            child: const Icon(Icons.camera_alt, color: Colors.white, size: 12),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _avatarInitial(User? user) => Container(
+    width: 64, height: 64,
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [AppColors.gradientStart, AppColors.gradientEnd],
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Center(child: Text(
+      user?.name.isNotEmpty == true ? user!.name[0].toUpperCase() : 'U',
+      style: GoogleFonts.plusJakartaSans(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white),
+    )),
+  );
 
   Future<void> _changePassword() async {
     if (_newPw.text != _confirm.text) {
@@ -90,22 +176,7 @@ class _ProfileTabState extends State<ProfileTab> {
               boxShadow: AppShadows.card,
             ),
             child: Row(children: [
-              Container(
-                width: 64, height: 64,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppColors.gradientStart, AppColors.gradientEnd],
-                    begin: Alignment.topLeft, end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Center(child: Text(
-                  user?.name.isNotEmpty == true ? user!.name[0].toUpperCase() : 'U',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white,
-                  ),
-                )),
-              ),
+              _buildAvatarWidget(user),
               const SizedBox(width: 16),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(user?.name ?? '', style: GoogleFonts.plusJakartaSans(
