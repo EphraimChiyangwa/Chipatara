@@ -32,6 +32,11 @@ const UserSchema = new mongoose.Schema({
   avatar: {
     type: String,
     default: null
+  },
+
+  suspended: {
+    type: Boolean,
+    default: false
   }
 
 });

@@ -197,3 +197,12 @@ export const adminGetAppointments = () =>
 
 export const adminUpdateAppointmentStatus = (id: string, status: string) =>
   request(`/admin/appointments/${id}/status`, { method: 'PUT', headers: headers(true), body: JSON.stringify({ status }) })
+
+export const adminGetStats = () =>
+  request<{ totalUsers: number; totalDoctors: number; totalAppointments: number; pendingDoctors: number; newUsersThisWeek: number; apptThisMonth: number; totalRevenue: number }>('/admin/stats', { headers: headers(true) })
+
+export const adminSuspendUser = (id: string) =>
+  request<{ suspended: boolean }>(`/admin/users/${id}/suspend`, { method: 'PUT', headers: headers(true) })
+
+export const adminBroadcast = (title: string, body: string, audience: 'all' | 'patients' | 'doctors') =>
+  request<{ message: string; sent: number }>('/admin/broadcast', { method: 'POST', headers: headers(true), body: JSON.stringify({ title, body, audience }) })
