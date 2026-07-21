@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../config/constants.dart';
+import '../../providers/badge_provider.dart';
 import 'home_tab.dart';
 import 'appointments_tab.dart';
 import 'messages_tab.dart';
@@ -25,12 +27,14 @@ class _PatientShellState extends State<PatientShell> {
 
   @override
   Widget build(BuildContext context) {
+    final msgBadge = context.watch<BadgeProvider>().messagesBadge;
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: IndexedStack(index: _tab, children: _tabs),
       bottomNavigationBar: _FloatingNav(
         selected: _tab,
         onTap: (i) => setState(() => _tab = i),
+        messagesBadge: msgBadge,
       ),
     );
   }
@@ -39,8 +43,13 @@ class _PatientShellState extends State<PatientShell> {
 class _FloatingNav extends StatelessWidget {
   final int selected;
   final ValueChanged<int> onTap;
+  final int messagesBadge;
 
-  const _FloatingNav({required this.selected, required this.onTap});
+  const _FloatingNav({
+    required this.selected,
+    required this.onTap,
+    this.messagesBadge = 0,
+  });
 
   static const _items = [
     (icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home'),
@@ -69,8 +78,11 @@ class _FloatingNav extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: List.generate(_items.length, (i) {
-          final item = _items[i];
+          final item   = _items[i];
           final active = selected == i;
+          // Badge only on Messages tab (index 2) when inactive
+          final badge  = (i == 2 && !active) ? messagesBadge : 0;
+
           return GestureDetector(
             onTap: () => onTap(i),
             behavior: HitTestBehavior.opaque,
@@ -83,9 +95,30 @@ class _FloatingNav extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(
-                  active ? item.activeIcon : item.icon,
-                  size: 20, color: active ? Colors.white : AppColors.textMuted,
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(
+                      active ? item.activeIcon : item.icon,
+                      size: 20,
+                      color: active ? Colors.white : AppColors.textMuted,
+                    ),
+                    if (badge > 0) Positioned(
+                      top: -5, right: -5,
+                      child: Container(
+                        width: 14, height: 14,
+                        decoration: BoxDecoration(
+                          color: AppColors.danger,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: active ? AppColors.primary : Colors.white, width: 1.5),
+                        ),
+                        child: Center(child: Text(
+                          badge > 9 ? '9+' : '$badge',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 8, fontWeight: FontWeight.w800, color: Colors.white),
+                        )),
+                      ),
+                    ),
+                  ],
                 ),
                 if (active) ...[
                   const SizedBox(width: 6),

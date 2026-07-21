@@ -1,34 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import '../../config/constants.dart';
 import '../../models/models.dart';
-import '../../providers/badge_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
 import '../chat_screen.dart';
 
-class MessagesTab extends StatefulWidget {
-  const MessagesTab({super.key});
+class DoctorMessagesTab extends StatefulWidget {
+  const DoctorMessagesTab({super.key});
 
   @override
-  State<MessagesTab> createState() => _MessagesTabState();
+  State<DoctorMessagesTab> createState() => _DoctorMessagesTabState();
 }
 
-class _MessagesTabState extends State<MessagesTab> {
-  List<Appointment> _appointments = [];
+class _DoctorMessagesTabState extends State<DoctorMessagesTab> {
+  List<Appointment> _conversations = [];
   bool _loading = true;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final all = await ApiService.getPatientAppointments();
-      _appointments = all.where((a) => a.status == 'confirmed' || a.status == 'completed').toList();
-      if (mounted) context.read<BadgeProvider>().updateFromAppointments(all);
+      final all = await ApiService.getDoctorAppointments();
+      setState(() {
+        _conversations = all
+          .where((a) => a.status == 'confirmed' || a.status == 'completed')
+          .toList();
+      });
     } catch (_) {}
     setState(() => _loading = false);
   }
@@ -36,61 +40,75 @@ class _MessagesTabState extends State<MessagesTab> {
   @override
   Widget build(BuildContext context) {
     return Column(children: [
-      GradientHeader(eyebrow: 'INBOX', title: 'Messages', subtitle: 'Chat with your doctors'),
+      const GradientHeader(
+        eyebrow: 'INBOX',
+        title: 'Messages',
+        subtitle: 'Chat with your patients',
+      ),
       Expanded(child: _loading
         ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-        : _appointments.isEmpty
+        : _conversations.isEmpty
           ? const EmptyState(
               icon: Icons.chat_bubble_outline_rounded,
               title: 'No conversations yet',
-              description: 'Messages appear here once a doctor confirms your appointment',
+              description: 'Chats appear here once you confirm an appointment',
             )
           : RefreshIndicator(
               onRefresh: _load,
               color: AppColors.primary,
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: _appointments.length,
+                itemCount: _conversations.length,
                 itemBuilder: (_, i) {
-                  final appt = _appointments[i];
+                  final appt = _conversations[i];
                   final date = DateTime.tryParse(appt.date);
+                  final isActive = appt.status == 'confirmed';
                   return ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     leading: CircleAvatar(
                       radius: 26,
-                      backgroundColor: AppColors.primaryLight,
+                      backgroundColor: isActive
+                          ? AppColors.primaryLight
+                          : const Color(0xFFF3F4F6),
                       child: Text(
-                        appt.doctorName.isNotEmpty ? appt.doctorName[0].toUpperCase() : 'D',
+                        appt.patientName.isNotEmpty ? appt.patientName[0].toUpperCase() : 'P',
                         style: GoogleFonts.plusJakartaSans(
-                          fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.primary,
+                          fontSize: 18, fontWeight: FontWeight.w800,
+                          color: isActive ? AppColors.primary : AppColors.textMuted,
                         ),
                       ),
                     ),
-                    title: Text(appt.doctorName, style: GoogleFonts.plusJakartaSans(
+                    title: Text(appt.patientName, style: GoogleFonts.plusJakartaSans(
                       fontWeight: FontWeight.w700, color: AppColors.textPrimary,
                     )),
                     subtitle: Text(
-                      appt.status == 'confirmed' ? 'Tap to start consultation' : appt.reason,
-                      style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.textSecondary),
+                      appt.reason,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12, color: AppColors.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     trailing: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                       if (date != null) Text(
                         DateFormat('MMM d').format(date),
-                        style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textMuted),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11, color: AppColors.textMuted,
+                        ),
                       ),
-                      if (appt.status == 'confirmed') ...[
+                      if (isActive) ...[
                         const SizedBox(height: 4),
                         Container(
                           width: 8, height: 8,
                           decoration: const BoxDecoration(
-                            color: AppColors.primary, shape: BoxShape.circle,
+                            color: AppColors.success, shape: BoxShape.circle,
                           ),
                         ),
                       ],
                     ]),
                     onTap: () => Navigator.push(context, MaterialPageRoute(
                       builder: (_) => ChatScreen(appointment: appt),
-                    )),
+                    )).then((_) => _load()),
                   );
                 },
               ),

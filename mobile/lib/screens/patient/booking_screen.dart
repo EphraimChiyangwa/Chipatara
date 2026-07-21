@@ -30,6 +30,11 @@ class _BookingScreenState extends State<BookingScreen> {
     _loadSlots();
   }
 
+  List<AvailabilitySlot> get _daySlots {
+    final dayName = DateFormat('EEEE').format(_selectedDate);
+    return _slots.where((s) => s.day == dayName).toList();
+  }
+
   Future<void> _loadSlots() async {
     try {
       _slots = await ApiService.getAvailability(widget.doctor.id);
@@ -140,7 +145,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   firstDate: DateTime.now().add(const Duration(days: 1)),
                   lastDate: DateTime.now().add(const Duration(days: 90)),
                 );
-                if (picked != null) setState(() => _selectedDate = picked);
+                if (picked != null) setState(() { _selectedDate = picked; _selectedSlot = null; });
               },
               child: Container(
                 padding: const EdgeInsets.all(14),
@@ -161,9 +166,12 @@ class _BookingScreenState extends State<BookingScreen> {
             // Time slot picker
             _FormSection(title: 'Select Time Slot', child: _slotsLoading
               ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-              : _slots.isEmpty
-                ? Text('No slots available', style: GoogleFonts.plusJakartaSans(color: AppColors.textMuted))
-                : Wrap(spacing: 8, runSpacing: 8, children: _slots.map((s) => GestureDetector(
+              : _daySlots.isEmpty
+                ? Text(
+                    _slots.isEmpty ? 'No slots available' : 'No slots on ${DateFormat('EEEE').format(_selectedDate)}',
+                    style: GoogleFonts.plusJakartaSans(color: AppColors.textMuted),
+                  )
+                : Wrap(spacing: 8, runSpacing: 8, children: _daySlots.map((s) => GestureDetector(
                     onTap: () => setState(() => _selectedSlot = s),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

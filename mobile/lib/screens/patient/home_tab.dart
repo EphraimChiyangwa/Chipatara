@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../config/constants.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/badge_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
 import 'ai_checker_screen.dart';
@@ -27,6 +28,13 @@ class _HomeTabState extends State<HomeTab> {
   List<String> _specs = [];
   final _searchCtrl = TextEditingController();
 
+  // Filter state
+  double _minFee = 0;
+  double _maxFee = 10000;
+  double _minRating = 0;
+
+  bool get _hasFilters => _minFee > 0 || _maxFee < 10000 || _minRating > 0;
+
   @override
   void initState() {
     super.initState();
@@ -37,20 +45,155 @@ class _HomeTabState extends State<HomeTab> {
     setState(() => _loading = true);
     try {
       final results = await Future.wait([
-        ApiService.getDoctors(search: _search, specialization: _spec),
+        ApiService.getDoctors(
+          search: _search,
+          specialization: _spec,
+          minFee: _minFee > 0 ? _minFee : null,
+          maxFee: _maxFee < 10000 ? _maxFee : null,
+          minRating: _minRating > 0 ? _minRating : null,
+        ),
         ApiService.getSpecializations(),
       ]);
       setState(() {
         _doctors = results[0] as List<Doctor>;
         _specs   = results[1] as List<String>;
       });
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 8)),
+        );
+      }
+    }
     setState(() => _loading = false);
+  }
+
+  void _showFilterSheet() {
+    double tmpMinFee    = _minFee;
+    double tmpMaxFee    = _maxFee;
+    double tmpMinRating = _minRating;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(builder: (ctx, setS) => Container(
+        padding: EdgeInsets.fromLTRB(20, 20, 20,
+          MediaQuery.of(ctx).viewInsets.bottom + 28),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Handle
+          Center(child: Container(width: 40, height: 4,
+            decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 20),
+          Row(children: [
+            Text('Filter Doctors', style: GoogleFonts.plusJakartaSans(
+              fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary,
+            )),
+            const Spacer(),
+            if (tmpMinFee > 0 || tmpMaxFee < 10000 || tmpMinRating > 0)
+              GestureDetector(
+                onTap: () => setS(() { tmpMinFee = 0; tmpMaxFee = 10000; tmpMinRating = 0; }),
+                child: Text('Clear all', style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600,
+                )),
+              ),
+          ]),
+          const SizedBox(height: 24),
+
+          // Fee range
+          Row(children: [
+            Text('Consultation Fee', style: GoogleFonts.plusJakartaSans(
+              fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary,
+            )),
+            const Spacer(),
+            Text(
+              'ZWL ${tmpMinFee.toInt()} – ${tmpMaxFee >= 10000 ? "10 000+" : tmpMaxFee.toInt()}',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600,
+              ),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          RangeSlider(
+            values: RangeValues(tmpMinFee, tmpMaxFee),
+            min: 0,
+            max: 10000,
+            divisions: 100,
+            activeColor: AppColors.primary,
+            inactiveColor: AppColors.primaryLight,
+            onChanged: (v) => setS(() { tmpMinFee = v.start; tmpMaxFee = v.end; }),
+          ),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('ZWL 0', style: GoogleFonts.plusJakartaSans(
+              fontSize: 11, color: AppColors.textMuted,
+            )),
+            Text('ZWL 10 000+', style: GoogleFonts.plusJakartaSans(
+              fontSize: 11, color: AppColors.textMuted,
+            )),
+          ]),
+          const SizedBox(height: 24),
+
+          // Min rating
+          Text('Minimum Rating', style: GoogleFonts.plusJakartaSans(
+            fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary,
+          )),
+          const SizedBox(height: 12),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            for (final r in [0.0, 3.0, 4.0, 4.5])
+              GestureDetector(
+                onTap: () => setS(() => tmpMinRating = r),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: tmpMinRating == r ? AppColors.primary : AppColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: tmpMinRating == r ? AppColors.primary : const Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (r > 0) ...[
+                      Icon(Icons.star_rounded, size: 13,
+                        color: tmpMinRating == r ? Colors.white : const Color(0xFFF59E0B)),
+                      const SizedBox(width: 4),
+                    ],
+                    Text(
+                      r == 0 ? 'Any' : '${r % 1 == 0 ? r.toInt() : r}+',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13, fontWeight: FontWeight.w700,
+                        color: tmpMinRating == r ? Colors.white : AppColors.textSecondary,
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+          ]),
+          const SizedBox(height: 28),
+
+          // Apply
+          AppButton(
+            label: 'Apply Filters',
+            icon: Icons.check_rounded,
+            onTap: () {
+              setState(() { _minFee = tmpMinFee; _maxFee = tmpMaxFee; _minRating = tmpMinRating; });
+              Navigator.pop(ctx);
+              _load();
+            },
+          ),
+        ]),
+      )),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthProvider>().user;
+    final user      = context.watch<AuthProvider>().user;
+    final notifBadge = context.watch<BadgeProvider>().notifBadge;
     return ListView(children: [
       // Header
       Container(
@@ -77,15 +220,28 @@ class _HomeTabState extends State<HomeTab> {
             GestureDetector(
               onTap: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const NotificationInboxScreen())),
-              child: Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+              child: Stack(clipBehavior: Clip.none, children: [
+                Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                  ),
+                  child: const Icon(Icons.notifications_outlined, color: Colors.white),
                 ),
-                child: const Icon(Icons.notifications_outlined, color: Colors.white),
-              ),
+                if (notifBadge > 0) Positioned(
+                  top: -4, right: -4,
+                  child: Container(
+                    width: 14, height: 14,
+                    decoration: BoxDecoration(
+                      color: AppColors.danger,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF3B5BDB), width: 1.5),
+                    ),
+                  ),
+                ),
+              ]),
             ),
           ]),
           const SizedBox(height: 20),
@@ -109,26 +265,56 @@ class _HomeTabState extends State<HomeTab> {
       Padding(
         padding: const EdgeInsets.all(20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Search bar
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: AppShadows.soft,
-            ),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (v) { _search = v; _load(); },
-              style: GoogleFonts.plusJakartaSans(fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'Search doctors…',
-                hintStyle: GoogleFonts.plusJakartaSans(color: AppColors.textMuted),
-                prefixIcon: const Icon(Icons.search, color: AppColors.textMuted),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+          // Search bar + filter button
+          Row(children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: AppShadows.soft,
+                ),
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) { _search = v; _load(); },
+                  style: GoogleFonts.plusJakartaSans(fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Search doctors…',
+                    hintStyle: GoogleFonts.plusJakartaSans(color: AppColors.textMuted),
+                    prefixIcon: const Icon(Icons.search, color: AppColors.textMuted),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
               ),
             ),
-          ),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: _showFilterSheet,
+              child: Container(
+                width: 48, height: 48,
+                decoration: BoxDecoration(
+                  color: _hasFilters ? AppColors.primary : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: AppShadows.soft,
+                ),
+                child: Stack(alignment: Alignment.center, children: [
+                  Icon(Icons.tune_rounded,
+                    color: _hasFilters ? Colors.white : AppColors.textSecondary, size: 22),
+                  if (_hasFilters)
+                    Positioned(
+                      top: 8, right: 8,
+                      child: Container(
+                        width: 8, height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.white, shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ]),
+              ),
+            ),
+          ]),
           const SizedBox(height: 16),
 
           // Specialization pills
@@ -267,9 +453,15 @@ class _DoctorCard extends StatelessWidget {
           ),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(doctor.name, style: GoogleFonts.plusJakartaSans(
-              fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary,
-            )),
+            Row(children: [
+              Flexible(child: Text(doctor.name, style: GoogleFonts.plusJakartaSans(
+                fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary,
+              ))),
+              if (doctor.profile?.verified == true) ...[
+                const SizedBox(width: 4),
+                const Icon(Icons.verified_rounded, color: Color(0xFF3B5BDB), size: 16),
+              ],
+            ]),
             if (doctor.profile != null) ...[
               const SizedBox(height: 2),
               Text(doctor.profile!.specialization, style: GoogleFonts.plusJakartaSans(

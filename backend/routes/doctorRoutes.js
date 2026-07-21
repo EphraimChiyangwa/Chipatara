@@ -231,4 +231,31 @@ router.get('/:id/reviews', async (req, res) => {
   }
 })
 
+// GET /api/doctors/user/:userId — fetch a single doctor + profile by their user ID (for follow-up booking)
+router.get('/user/:userId', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).select('name email').lean();
+    if (!user) return res.status(404).json({ message: 'Doctor not found.' });
+    const profile = await Doctor.findOne({ user: req.params.userId }).lean();
+    const rated = await Appointment.find({ doctor: req.params.userId, rating: { $gt: 0 } }).select('rating').lean();
+    const avg = rated.length ? +(rated.reduce((s, a) => s + a.rating, 0) / rated.length).toFixed(1) : 0;
+    res.json({ ...user, profile: profile || null, averageRating: avg, reviewCount: rated.length });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PUT /api/doctors/toggle-online — toggle doctor's online/offline status
+router.put('/toggle-online', authMiddleware, roleMiddleware('doctor'), async (req, res) => {
+  try {
+    const profile = await Doctor.findOne({ user: req.user.id });
+    if (!profile) return res.status(404).json({ message: 'Doctor profile not found.' });
+    profile.isOnline = !profile.isOnline;
+    await profile.save();
+    res.json({ isOnline: profile.isOnline });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;

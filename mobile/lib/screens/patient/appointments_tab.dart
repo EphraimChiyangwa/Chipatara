@@ -5,6 +5,7 @@ import '../../config/constants.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
+import '../chat_screen.dart';
 import 'appointment_detail_screen.dart';
 import 'video_call_screen.dart';
 
@@ -20,9 +21,14 @@ class _AppointmentsTabState extends State<AppointmentsTab>
   late final TabController _tabCtrl;
   List<Appointment> _all = [];
   bool _loading = true;
+  String _search = '';
+  final _searchCtrl = TextEditingController();
+
+  bool _matches(Appointment a) =>
+      _search.isEmpty || a.doctorName.toLowerCase().contains(_search.toLowerCase());
 
   List<Appointment> get _upcoming => _all
-      .where((a) => a.status == 'pending' || a.status == 'confirmed')
+      .where((a) => (a.status == 'pending' || a.status == 'confirmed') && _matches(a))
       .toList()
     ..sort((a, b) {
       final da = DateTime.tryParse(a.date) ?? DateTime(9999);
@@ -31,7 +37,7 @@ class _AppointmentsTabState extends State<AppointmentsTab>
     });
 
   List<Appointment> get _completed => _all
-      .where((a) => a.status == 'completed')
+      .where((a) => a.status == 'completed' && _matches(a))
       .toList()
     ..sort((a, b) {
       final da = DateTime.tryParse(a.date) ?? DateTime(0);
@@ -40,7 +46,7 @@ class _AppointmentsTabState extends State<AppointmentsTab>
     });
 
   List<Appointment> get _cancelled =>
-      _all.where((a) => a.status == 'cancelled').toList();
+      _all.where((a) => a.status == 'cancelled' && _matches(a)).toList();
 
   @override
   void initState() {
@@ -53,6 +59,7 @@ class _AppointmentsTabState extends State<AppointmentsTab>
   @override
   void dispose() {
     _tabCtrl.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -178,6 +185,34 @@ class _AppointmentsTabState extends State<AppointmentsTab>
             const SizedBox(width: 8),
             _tabPill('Cancelled', 2, _cancelled.length),
           ]),
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+            ),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => setState(() => _search = v),
+              style: GoogleFonts.plusJakartaSans(fontSize: 13, color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Search by doctor name…',
+                hintStyle: GoogleFonts.plusJakartaSans(
+                  color: Colors.white.withValues(alpha: 0.55), fontSize: 13,
+                ),
+                prefixIcon: const Icon(Icons.search_rounded, color: Colors.white, size: 18),
+                suffixIcon: _search.isNotEmpty
+                    ? GestureDetector(
+                        onTap: () { _searchCtrl.clear(); setState(() => _search = ''); },
+                        child: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
         ]),
       ),
 
@@ -206,8 +241,11 @@ class _AppointmentsTabState extends State<AppointmentsTab>
                     await ApiService.cancelAppointment(appt.id);
                     _load();
                   },
-                  onJoinVideo: () => Navigator.push(context, MaterialPageRoute(
+                  onJoinVideo: appt.status == 'confirmed' ? () => Navigator.push(context, MaterialPageRoute(
                     builder: (_) => VideoCallScreen(appointment: appt),
+                  )) : null,
+                  onChat: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => ChatScreen(appointment: appt),
                   )),
                   onRate: null,
                   onViewRx: null,
@@ -309,6 +347,7 @@ class _ApptCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onCancel;
   final VoidCallback? onJoinVideo;
+  final VoidCallback? onChat;
   final VoidCallback? onRate;
   final VoidCallback? onViewRx;
 
@@ -319,6 +358,7 @@ class _ApptCard extends StatelessWidget {
     required this.onTap,
     this.onCancel,
     this.onJoinVideo,
+    this.onChat,
     this.onRate,
     this.onViewRx,
   });
@@ -327,7 +367,7 @@ class _ApptCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final date = DateTime.tryParse(appt.date);
     final hasActions = onCancel != null || onJoinVideo != null ||
-        onRate != null || onViewRx != null;
+        onChat != null || onRate != null || onViewRx != null;
 
     return GestureDetector(
       onTap: onTap,
@@ -447,6 +487,16 @@ class _ApptCard extends StatelessWidget {
                       color: AppColors.success,
                       onTap: onJoinVideo!,
                     )),
+                  if (onChat != null) ...[
+                    if (onJoinVideo != null) const SizedBox(width: 8),
+                    Expanded(child: _ActionButton(
+                      label: 'Chat',
+                      icon: Icons.chat_bubble_outline_rounded,
+                      color: AppColors.primary,
+                      outlined: true,
+                      onTap: onChat!,
+                    )),
+                  ],
                   if (onViewRx != null) ...[
                     Expanded(child: _ActionButton(
                       label: 'View Rx',

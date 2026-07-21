@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 // Android emulator: http://10.0.2.2:5000/api
 // Physical device on same WiFi: http://10.100.160.109:5000/api
-const String kBaseUrl = 'http://10.100.160.109:5000/api';
-const String kSocketUrl = 'http://10.100.160.109:5000';
+const String kBaseUrl = 'http://10.0.2.2:5000/api';
+const String kSocketUrl = 'http://10.0.2.2:5000';
 
 class AppColors {
   static const primary       = Color(0xFF3B5BDB);

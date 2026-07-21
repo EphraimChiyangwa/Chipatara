@@ -157,4 +157,34 @@ router.post('/verify', authMiddleware, async (req, res) => {
   }
 })
 
+// GET /api/payments/history — patient's paid appointment history with fees
+router.get('/history', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'patient') return res.status(403).json({ message: 'Patients only.' })
+
+    const appointments = await Appointment.find({ patient: req.user.id, paid: true })
+      .populate('doctor', 'name email')
+      .sort({ date: -1 })
+      .lean()
+
+    const results = await Promise.all(appointments.map(async (appt) => {
+      const doctorId = appt.doctor?._id ?? appt.doctor
+      const profile = await Doctor.findOne({ user: doctorId }).select('consultationFee').lean()
+      return {
+        id: appt._id,
+        doctorName: appt.doctor?.name ?? 'Doctor',
+        date: appt.date,
+        reason: appt.reason,
+        status: appt.status,
+        fee: profile?.consultationFee ?? 0,
+        reference: appt.paystackReference ?? '',
+      }
+    }))
+
+    res.json(results)
+  } catch (err) {
+    res.status(500).json({ message: err.message })
+  }
+})
+
 module.exports = router

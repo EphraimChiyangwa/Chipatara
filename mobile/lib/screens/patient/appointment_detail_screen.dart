@@ -5,6 +5,7 @@ import '../../config/constants.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
+import 'booking_screen.dart';
 import 'reschedule_screen.dart';
 import 'video_call_screen.dart';
 
@@ -25,10 +26,11 @@ class AppointmentDetailScreen extends StatefulWidget {
 class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   late Appointment _appt;
   Prescription? _rx;
-  bool _rxLoading = false;
-  double _rating = 5;
-  bool _showRating = false;
-  final _reviewCtrl = TextEditingController();
+  bool _rxLoading     = false;
+  bool _followUpBusy  = false;
+  double _rating      = 5;
+  bool _showRating    = false;
+  final _reviewCtrl   = TextEditingController();
 
   @override
   void initState() {
@@ -64,6 +66,31 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
       setState(() => _showRating = false);
       widget.onRefresh();
     } catch (_) {}
+  }
+
+  Future<void> _bookFollowUp() async {
+    setState(() => _followUpBusy = true);
+    try {
+      final doctor = await ApiService.getDoctorByUserId(_appt.doctorId);
+      if (!mounted) { return; }
+      if (doctor == null || doctor.profile == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Doctor profile unavailable for booking.'),
+          backgroundColor: Color(0xFF374151),
+        ));
+        return;
+      }
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => BookingScreen(doctor: doctor),
+      ));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceAll('Exception: ', '')),
+        backgroundColor: AppColors.danger,
+      ));
+    } finally {
+      if (mounted) setState(() => _followUpBusy = false);
+    }
   }
 
   Color get _statusColor => switch (_appt.status) {
@@ -315,6 +342,18 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                 textColor: AppColors.danger,
                 onTap: _cancel,
               ),
+              const SizedBox(height: 10),
+            ],
+            if (_appt.status == 'completed') ...[
+              AppButton(
+                label: 'Book Follow-up',
+                icon: Icons.event_repeat_outlined,
+                color: AppColors.primaryLight,
+                textColor: AppColors.primary,
+                loading: _followUpBusy,
+                onTap: _bookFollowUp,
+              ),
+              const SizedBox(height: 10),
             ],
             const SizedBox(height: 32),
           ],

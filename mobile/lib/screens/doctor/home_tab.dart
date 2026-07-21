@@ -9,7 +9,11 @@ import '../../services/api_service.dart';
 import '../../widgets/widgets.dart';
 import '../chat_screen.dart';
 import '../patient/video_call_screen.dart';
+import 'patient_documents_screen.dart';
 import 'patient_health_data_screen.dart';
+import 'patient_history_screen.dart';
+import 'patient_journal_screen.dart';
+import 'patient_list_screen.dart';
 
 class DoctorHomeTab extends StatefulWidget {
   const DoctorHomeTab({super.key});
@@ -20,7 +24,8 @@ class DoctorHomeTab extends StatefulWidget {
 
 class _DoctorHomeTabState extends State<DoctorHomeTab> {
   List<Appointment> _appointments = [];
-  bool _loading = true;
+  bool _loading  = true;
+  bool _isOnline = true;
   String _filter = 'pending';
 
   @override
@@ -28,8 +33,26 @@ class _DoctorHomeTabState extends State<DoctorHomeTab> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    try { _appointments = await ApiService.getDoctorAppointments(); } catch (_) {}
+    try {
+      final results = await Future.wait([
+        ApiService.getDoctorAppointments(),
+        ApiService.getMyDoctorProfile(),
+      ]);
+      _appointments = results[0] as List<Appointment>;
+      final profile = results[1] as DoctorProfile?;
+      if (profile != null) _isOnline = profile.isOnline;
+    } catch (_) {}
     setState(() => _loading = false);
+  }
+
+  Future<void> _toggleOnline() async {
+    final prev = _isOnline;
+    setState(() => _isOnline = !_isOnline);
+    try {
+      await ApiService.toggleDoctorOnline();
+    } catch (_) {
+      setState(() => _isOnline = prev);
+    }
   }
 
   List<Appointment> get _filtered => _appointments.where((a) => a.status == _filter).toList();
@@ -39,6 +62,7 @@ class _DoctorHomeTabState extends State<DoctorHomeTab> {
       await ApiService.updateAppointmentStatus(appt.id, status);
       _load();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: AppColors.danger),
       );
@@ -73,16 +97,32 @@ class _DoctorHomeTabState extends State<DoctorHomeTab> {
                 fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white,
               )),
             ]),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+            GestureDetector(
+              onTap: _toggleOnline,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                    width: 7, height: 7,
+                    decoration: BoxDecoration(
+                      color: _isOnline ? const Color(0xFF22C55E) : const Color(0xFF94A3B8),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _isOnline ? 'Online' : 'Offline',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white,
+                    ),
+                  ),
+                ]),
               ),
-              child: Text('Online', style: GoogleFonts.plusJakartaSans(
-                fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white,
-              )),
             ),
           ]),
           const SizedBox(height: 20),
@@ -102,6 +142,29 @@ class _DoctorHomeTabState extends State<DoctorHomeTab> {
               }).length.toString(), icon: Icons.today_rounded,
             )),
           ]),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => const PatientListScreen(),
+            )),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.people_outline_rounded, color: Colors.white, size: 16),
+                const SizedBox(width: 8),
+                Text('View All Patients', style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white,
+                )),
+                const Spacer(),
+                const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 12),
+              ]),
+            ),
+          ),
         ]),
       ),
 
@@ -144,6 +207,45 @@ class _DoctorHomeTabState extends State<DoctorHomeTab> {
                       backgroundColor: Colors.transparent,
                       builder: (_) => _PrescribeSheet(appointment: _filtered[i]),
                     ),
+                    onNotes: () => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => _NotesSheet(appointment: _filtered[i]),
+                    ),
+                    onViewDocs: () {
+                      final patId = _filtered[i].patient is Map
+                          ? (_filtered[i].patient['_id'] ?? _filtered[i].patient['id'] ?? '')
+                          : '';
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => PatientDocumentsScreen(
+                          patientId: patId,
+                          patientName: _filtered[i].patientName,
+                        ),
+                      ));
+                    },
+                    onHistory: () {
+                      final patId = _filtered[i].patient is Map
+                          ? (_filtered[i].patient['_id'] ?? _filtered[i].patient['id'] ?? '')
+                          : '';
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => PatientHistoryScreen(
+                          patientId: patId,
+                          patientName: _filtered[i].patientName,
+                        ),
+                      ));
+                    },
+                    onJournal: () {
+                      final patId = _filtered[i].patient is Map
+                          ? (_filtered[i].patient['_id'] ?? _filtered[i].patient['id'] ?? '')
+                          : '';
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => PatientJournalScreen(
+                          patientId: patId,
+                          patientName: _filtered[i].patientName,
+                        ),
+                      ));
+                    },
                   ),
                 ),
           )),
@@ -177,11 +279,15 @@ class _FilterChip extends StatelessWidget {
 
 class _ApptCard extends StatelessWidget {
   final Appointment appt;
-  final VoidCallback onConfirm, onComplete, onCancel, onChat, onPrescribe;
+  final VoidCallback onConfirm, onComplete, onCancel, onChat, onPrescribe, onNotes, onViewDocs, onHistory, onJournal;
 
   const _ApptCard({
-    required this.appt, required this.onConfirm, required this.onComplete,
-    required this.onCancel, required this.onChat, required this.onPrescribe,
+    required this.appt,
+    required this.onConfirm, required this.onComplete,
+    required this.onCancel,  required this.onChat,
+    required this.onPrescribe, required this.onNotes,
+    required this.onViewDocs, required this.onHistory,
+    required this.onJournal,
   });
 
   @override
@@ -218,6 +324,7 @@ class _ApptCard extends StatelessWidget {
           fontSize: 13, color: AppColors.textSecondary,
         )),
         const SizedBox(height: 12),
+        // Primary actions row
         Row(children: [
           if (appt.status == 'pending') ...[
             Expanded(child: _ActionBtn(label: 'Confirm', color: AppColors.success, onTap: onConfirm)),
@@ -225,9 +332,7 @@ class _ApptCard extends StatelessWidget {
             Expanded(child: _ActionBtn(label: 'Decline', color: AppColors.danger, onTap: onCancel, outlined: true)),
           ] else if (appt.status == 'confirmed') ...[
             Expanded(child: _ActionBtn(
-              label: 'Join Video',
-              color: AppColors.success,
-              icon: Icons.videocam_outlined,
+              label: 'Join Video', color: AppColors.success, icon: Icons.videocam_outlined,
               onTap: () => Navigator.push(context, MaterialPageRoute(
                 builder: (_) => VideoCallScreen(appointment: appt),
               )),
@@ -238,26 +343,47 @@ class _ApptCard extends StatelessWidget {
             Expanded(child: _ActionBtn(label: 'Complete', color: AppColors.textSecondary, onTap: onComplete, outlined: true)),
           ] else if (appt.status == 'completed') ...[
             Expanded(child: _ActionBtn(label: 'Prescribe', color: AppColors.primary, icon: Icons.medication_outlined, onTap: onPrescribe)),
+            const SizedBox(width: 8),
+            Expanded(child: _ActionBtn(label: 'Notes', color: const Color(0xFF7C3AED), icon: Icons.notes_rounded, onTap: onNotes)),
           ],
         ]),
+        // Secondary actions (health data + documents) for active appointments
         if (appt.status == 'confirmed' || appt.status == 'completed') ...[
           const SizedBox(height: 8),
-          _ActionBtn(
-            label: 'View Health Data',
-            color: const Color(0xFF0891B2),
-            icon: Icons.monitor_heart_outlined,
-            onTap: () {
-              final patientId = appt.patient is Map
-                  ? (appt.patient['_id'] ?? appt.patient['id'] ?? '')
-                  : '';
-              Navigator.push(context, MaterialPageRoute(
-                builder: (_) => PatientHealthDataScreen(
-                  patientId: patientId,
-                  patientName: appt.patientName,
-                ),
-              ));
-            },
-          ),
+          Row(children: [
+            Expanded(child: _ActionBtn(
+              label: 'Health Data', color: const Color(0xFF0891B2),
+              icon: Icons.monitor_heart_outlined,
+              onTap: () {
+                final patientId = appt.patient is Map
+                    ? (appt.patient['_id'] ?? appt.patient['id'] ?? '')
+                    : '';
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => PatientHealthDataScreen(patientId: patientId, patientName: appt.patientName),
+                ));
+              },
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: _ActionBtn(
+              label: 'Documents', color: const Color(0xFF059669),
+              icon: Icons.folder_outlined,
+              onTap: onViewDocs,
+            )),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: _ActionBtn(
+              label: 'History', color: const Color(0xFF7C3AED),
+              icon: Icons.history_rounded,
+              onTap: onHistory,
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: _ActionBtn(
+              label: 'Journal', color: const Color(0xFF059669),
+              icon: Icons.edit_note_rounded,
+              onTap: onJournal,
+            )),
+          ]),
         ],
       ]),
     );
@@ -292,6 +418,90 @@ class _ActionBtn extends StatelessWidget {
       ]),
     ),
   );
+}
+
+// ── Consultation notes sheet ───────────────────────────────────────────────
+
+class _NotesSheet extends StatefulWidget {
+  final Appointment appointment;
+  const _NotesSheet({required this.appointment});
+
+  @override
+  State<_NotesSheet> createState() => _NotesSheetState();
+}
+
+class _NotesSheetState extends State<_NotesSheet> {
+  final _ctrl    = TextEditingController();
+  bool _loading  = false;
+  String? _msg;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl.text = widget.appointment.notes ?? '';
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  Future<void> _save() async {
+    setState(() { _loading = true; _msg = null; });
+    try {
+      await ApiService.saveConsultationNotes(widget.appointment.id, _ctrl.text.trim());
+      setState(() => _msg = 'Notes saved.');
+    } catch (e) {
+      setState(() => _msg = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 20, 20, bottom + 20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text('Consultation Notes', style: GoogleFonts.plusJakartaSans(
+            fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary,
+          )),
+          const Spacer(),
+          IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+        ]),
+        Text('Patient: ${widget.appointment.patientName}', style: GoogleFonts.plusJakartaSans(
+          fontSize: 13, color: AppColors.textSecondary,
+        )),
+        const SizedBox(height: 16),
+        AppInput(
+          label: 'Notes',
+          hint: 'Observations, diagnosis, follow-up instructions…',
+          controller: _ctrl,
+          maxLines: 5,
+        ),
+        if (_msg != null) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _msg!.contains('saved') ? AppColors.successLight : AppColors.dangerLight,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(_msg!, style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              color: _msg!.contains('saved') ? AppColors.success : AppColors.danger,
+            )),
+          ),
+        ],
+        const SizedBox(height: 16),
+        AppButton(label: 'Save Notes', onTap: _save, loading: _loading, icon: Icons.save_outlined),
+      ]),
+    );
+  }
 }
 
 // ── Prescription sheet ─────────────────────────────────────────────────────

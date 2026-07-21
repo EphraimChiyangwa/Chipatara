@@ -22,6 +22,7 @@ class DoctorProfile {
   final double consultationFee;
   final String? bio;
   final bool verified;
+  final bool isOnline;
   final String licenseNumber;
   final int yearsOfExperience;
 
@@ -31,6 +32,7 @@ class DoctorProfile {
     required this.consultationFee,
     this.bio,
     required this.verified,
+    this.isOnline = true,
     this.licenseNumber = '',
     this.yearsOfExperience = 0,
   });
@@ -41,6 +43,7 @@ class DoctorProfile {
     consultationFee: (j['consultationFee'] ?? 0).toDouble(),
     bio: j['bio'],
     verified: j['verified'] ?? false,
+    isOnline: j['isOnline'] ?? true,
     licenseNumber: j['licenseNumber'] ?? '',
     yearsOfExperience: j['yearsOfExperience'] ?? 0,
   );

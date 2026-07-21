@@ -4,6 +4,7 @@ import '../../config/constants.dart';
 import 'availability_tab.dart';
 import 'earnings_tab.dart';
 import 'home_tab.dart';
+import 'messages_tab.dart';
 import 'profile_tab.dart';
 
 class DoctorShell extends StatefulWidget {
@@ -19,6 +20,7 @@ class _DoctorShellState extends State<DoctorShell> {
   final _tabs = const [
     DoctorHomeTab(),
     DoctorAvailabilityTab(),
+    DoctorMessagesTab(),
     DoctorEarningsTab(),
     DoctorProfileTab(),
   ];
@@ -42,6 +44,7 @@ class _FloatingNav extends StatelessWidget {
   static const _items = [
     (icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard_rounded, label: 'Dashboard'),
     (icon: Icons.calendar_month_outlined, activeIcon: Icons.calendar_month_rounded, label: 'Availability'),
+    (icon: Icons.chat_bubble_outline_rounded, activeIcon: Icons.chat_bubble_rounded, label: 'Messages'),
     (icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart_rounded, label: 'Earnings'),
     (icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: 'Profile'),
   ];

@@ -18,7 +18,12 @@ class AuthProvider extends ChangeNotifier {
   bool get isAdmin => _user?.role == 'admin';
 
   AuthProvider() {
+    ApiService.onUnauthorized = _handleUnauthorized;
     _restore();
+  }
+
+  void _handleUnauthorized() {
+    if (_user != null) logout();
   }
 
   Future<void> _restore() async {

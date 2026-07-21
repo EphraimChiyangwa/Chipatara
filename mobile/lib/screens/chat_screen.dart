@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../config/constants.dart';
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/badge_provider.dart';
 import '../services/api_service.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -28,6 +29,9 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _loadMessages();
     _connectSocket();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<BadgeProvider>().markChatViewed(widget.appointment.id);
+    });
   }
 
   @override

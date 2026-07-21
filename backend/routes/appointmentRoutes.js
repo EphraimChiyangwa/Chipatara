@@ -146,6 +146,25 @@ router.put("/:id/reschedule", authMiddleware, async (req, res) => {
   }
 });
 
+// GET /history/:patientId — doctor fetches all appointments with a specific patient
+router.get("/history/:patientId", authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({ message: "Doctors only." });
+    }
+    const appointments = await Appointment.find({
+      doctor: req.user.id,
+      patient: req.params.patientId,
+    })
+      .populate("doctor", "name email")
+      .populate("patient", "name email")
+      .sort({ date: -1 });
+    res.json(appointments);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // GET /:id — fetch a single appointment (patient or doctor who owns it)
 router.get("/:id", authMiddleware, async (req, res) => {
   try {

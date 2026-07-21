@@ -1,6 +1,11 @@
+import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../config/constants.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
@@ -120,6 +125,7 @@ class _PrescriptionCardState extends State<_PrescriptionCard> {
   bool _expanded = false;
   bool _reminderOn = false;
   bool _reminderLoading = false;
+  bool _sharing = false;
 
   @override
   void initState() {
@@ -127,6 +133,49 @@ class _PrescriptionCardState extends State<_PrescriptionCard> {
     MedicineReminderService.isEnabled(widget.rx.id).then((v) {
       if (mounted) setState(() => _reminderOn = v);
     });
+  }
+
+  Future<void> _shareRx() async {
+    setState(() => _sharing = true);
+    final repaintKey = GlobalKey();
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => Positioned(
+        left: -5000,
+        top: 0,
+        child: Material(
+          color: Colors.transparent,
+          child: RepaintBoundary(
+            key: repaintKey,
+            child: _PrescriptionShareCard(rx: widget.rx),
+          ),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(entry);
+    await WidgetsBinding.instance.endOfFrame;
+    try {
+      final boundary = repaintKey.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      final tmp = await getTemporaryDirectory();
+      final file = File('${tmp.path}/rx_${widget.rx.id}.png');
+      await file.writeAsBytes(byteData.buffer.asUint8List());
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile(file.path)],
+        subject: 'Prescription — ${widget.rx.doctorName}',
+      ));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not share prescription')),
+        );
+      }
+    } finally {
+      entry.remove();
+      if (mounted) setState(() => _sharing = false);
+    }
   }
 
   Future<void> _toggleReminder() async {
@@ -255,7 +304,30 @@ class _PrescriptionCardState extends State<_PrescriptionCard> {
         // Expanded content
         AnimatedCrossFade(
           firstChild: const SizedBox.shrink(),
-          secondChild: _ExpandedContent(rx: rx),
+          secondChild: Column(children: [
+            _ExpandedContent(rx: rx),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: OutlinedButton.icon(
+                onPressed: _sharing ? null : _shareRx,
+                icon: _sharing
+                    ? const SizedBox(width: 14, height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0891B2)))
+                    : const Icon(Icons.share_outlined, size: 15),
+                label: Text(
+                  _sharing ? 'Preparing…' : 'Share Prescription',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF0891B2),
+                  side: const BorderSide(color: Color(0xFF0891B2), width: 1),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  minimumSize: const Size(double.infinity, 40),
+                ),
+              ),
+            ),
+          ]),
           crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
           duration: const Duration(milliseconds: 240),
         ),
@@ -364,5 +436,133 @@ class _ExpandedContent extends StatelessWidget {
         ]),
       ),
     ]);
+  }
+}
+
+// ── Off-screen card rendered and captured for sharing ────────────────────────
+class _PrescriptionShareCard extends StatelessWidget {
+  final Prescription rx;
+  const _PrescriptionShareCard({required this.rx});
+
+  @override
+  Widget build(BuildContext context) {
+    final date = rx.appointmentDate ?? rx.createdAt;
+    return SizedBox(
+      width: 400,
+      child: Container(
+        color: Colors.white,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // Teal header
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF0E7490), Color(0xFF0891B2), Color(0xFF22D3EE)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Icon(Icons.medication_outlined, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Text('PRESCRIPTION', style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11, fontWeight: FontWeight.w700,
+                  color: Colors.white.withValues(alpha: 0.8), letterSpacing: 1.5,
+                )),
+              ]),
+              const SizedBox(height: 10),
+              Text('Dr. ${rx.doctorName}', style: GoogleFonts.plusJakartaSans(
+                fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white,
+              )),
+              const SizedBox(height: 4),
+              Text(DateFormat('EEEE, MMMM d, y').format(date),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12, color: Colors.white.withValues(alpha: 0.8),
+                )),
+              if (rx.appointmentReason.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text('Re: ${rx.appointmentReason}',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12, color: Colors.white.withValues(alpha: 0.7),
+                  )),
+              ],
+            ]),
+          ),
+
+          // Medications
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('MEDICATIONS', style: GoogleFonts.plusJakartaSans(
+                fontSize: 10, fontWeight: FontWeight.w700,
+                color: const Color(0xFF6B7280), letterSpacing: 1.2,
+              )),
+              const SizedBox(height: 10),
+              ...rx.medications.map((m) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFECFEFF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFCFFAFE)),
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(m.name, style: GoogleFonts.plusJakartaSans(
+                    fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF1F2937),
+                  )),
+                  const SizedBox(height: 4),
+                  if (m.dosage.isNotEmpty)
+                    Text('Dose: ${m.dosage}', style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12, color: const Color(0xFF4B5563),
+                    )),
+                  if (m.frequency.isNotEmpty)
+                    Text('Frequency: ${m.frequency}', style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12, color: const Color(0xFF0891B2),
+                    )),
+                  if (m.duration.isNotEmpty)
+                    Text('Duration: ${m.duration}', style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12, color: const Color(0xFF4B5563),
+                    )),
+                  if (m.instructions.isNotEmpty)
+                    Text(m.instructions, style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11, color: const Color(0xFF6B7280),
+                    )),
+                ]),
+              )),
+
+              if (rx.notes.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: Text(rx.notes, style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12, color: const Color(0xFF92400E),
+                  )),
+                ),
+              ],
+
+              const SizedBox(height: 20),
+              const Divider(color: Color(0xFFE5E7EB)),
+              const SizedBox(height: 12),
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.health_and_safety_outlined, size: 14, color: Color(0xFF9CA3AF)),
+                const SizedBox(width: 6),
+                Text('Chipatara Telemedicine', style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12, fontWeight: FontWeight.w600, color: const Color(0xFF9CA3AF),
+                )),
+              ]),
+              const SizedBox(height: 4),
+            ]),
+          ),
+        ]),
+      ),
+    );
   }
 }

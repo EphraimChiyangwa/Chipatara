@@ -36,6 +36,8 @@ const deviceRoutes         = require('./routes/deviceRoutes')
 const medicalProfileRoutes  = require('./routes/medicalProfileRoutes')
 const prescriptionRoutes    = require('./routes/prescriptionRoutes')
 const paymentRoutes         = require('./routes/paymentRoutes')
+const documentRoutes        = require('./routes/documentRoutes')
+const journalRoutes         = require('./routes/journalRoutes')
 const { checkSymptoms, recommendDoctor } = require('./utils/symptomChecker')
 
 // Attach socket.io instance to every request for routes that need real-time push
@@ -51,6 +53,8 @@ app.use('/api/devices',         deviceRoutes)
 app.use('/api/medical-profile',  medicalProfileRoutes)
 app.use('/api/prescriptions',    prescriptionRoutes)
 app.use('/api/payments',         paymentRoutes)
+app.use('/api/documents',        documentRoutes)
+app.use('/api/journal',          journalRoutes)
 
 // Rule-based AI symptom checker (no external API needed)
 app.post('/api/ai/symptoms', (req, res) => {

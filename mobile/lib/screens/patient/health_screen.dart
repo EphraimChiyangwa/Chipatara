@@ -1,9 +1,11 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../config/constants.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
+import '../../services/background_sync_service.dart';
 import '../../services/health_connect_service.dart';
 import '../../widgets/widgets.dart';
 
@@ -19,9 +21,35 @@ class _HealthScreenState extends State<HealthScreen> {
   bool _loading = true;
   bool _syncing = false;
   String? _syncMsg;
+  bool _autoSync = false;
+  DateTime? _lastSync;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+    _loadAutoSyncState();
+  }
+
+  Future<void> _loadAutoSyncState() async {
+    final enabled = await BackgroundSyncService.isEnabled();
+    final last    = await BackgroundSyncService.lastSyncTime();
+    if (mounted) setState(() { _autoSync = enabled; _lastSync = last; });
+  }
+
+  Future<void> _toggleAutoSync(bool value) async {
+    if (value) {
+      final granted = await HealthConnectService.requestPermissions();
+      if (!granted) {
+        setState(() => _syncMsg = 'Health Connect permission required for auto-sync.');
+        return;
+      }
+      await BackgroundSyncService.enable();
+    } else {
+      await BackgroundSyncService.disable();
+    }
+    if (mounted) setState(() => _autoSync = value);
+  }
 
   Future<void> _load() async {
     setState(() => _loading = true);
@@ -41,7 +69,12 @@ class _HealthScreenState extends State<HealthScreen> {
       if (payload == null) {
         setState(() => _syncMsg = 'No recent data found on your device.');
       } else {
-        setState(() => _syncMsg = 'Synced ${payload.length} metric(s) from your watch.');
+        await BackgroundSyncService.recordSync();
+        final last = await BackgroundSyncService.lastSyncTime();
+        setState(() {
+          _syncMsg = 'Synced ${payload.length} metric(s) from your watch.';
+          _lastSync = last;
+        });
         await _load();
       }
     } catch (e) {
@@ -49,6 +82,14 @@ class _HealthScreenState extends State<HealthScreen> {
     } finally {
       setState(() => _syncing = false);
     }
+  }
+
+  String _timeAgo(DateTime t) {
+    final diff = DateTime.now().difference(t);
+    if (diff.inMinutes < 1)  return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24)   return '${diff.inHours}h ago';
+    return DateFormat('MMM d, h:mm a').format(t);
   }
 
   bool _isAlert(HealthMetric m) =>
@@ -83,6 +124,47 @@ class _HealthScreenState extends State<HealthScreen> {
             ),
           ),
         ),
+        // Auto-sync toggle card
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: AppShadows.soft,
+          ),
+          child: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _autoSync ? const Color(0xFFD1FAE5) : const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.sync_rounded,
+                size: 18,
+                color: _autoSync ? const Color(0xFF059669) : AppColors.textMuted,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Auto-Sync', style: GoogleFonts.plusJakartaSans(
+                fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary,
+              )),
+              Text(
+                _autoSync
+                  ? (_lastSync != null ? 'Last synced ${_timeAgo(_lastSync!)}' : 'Syncing every 15 minutes')
+                  : 'Tap to sync automatically every 15 min',
+                style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textSecondary),
+              ),
+            ])),
+            Switch(
+              value: _autoSync,
+              onChanged: _toggleAutoSync,
+              activeThumbColor: const Color(0xFF059669),
+            ),
+          ]),
+        ),
+
         // Sync from Watch banner
         Container(
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -187,6 +269,13 @@ class _HealthScreenState extends State<HealthScreen> {
                       const SizedBox(height: 20),
                     ],
                     if (_metrics.length > 1) ...[
+                      Text('7-DAY TRENDS', style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11, fontWeight: FontWeight.w700,
+                        color: AppColors.textMuted, letterSpacing: 1.2,
+                      )),
+                      const SizedBox(height: 12),
+                      _TrendChart(metrics: _metrics.reversed.toList()),
+                      const SizedBox(height: 20),
                       Text('HISTORY', style: GoogleFonts.plusJakartaSans(
                         fontSize: 11, fontWeight: FontWeight.w700,
                         color: AppColors.textMuted, letterSpacing: 1.2,
@@ -307,4 +396,152 @@ class _MiniStat extends StatelessWidget {
       fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primary,
     )),
   );
+}
+
+// ── 7-day trend chart ─────────────────────────────────────────────────────────
+class _TrendChart extends StatefulWidget {
+  final List<HealthMetric> metrics;
+  const _TrendChart({required this.metrics});
+
+  @override
+  State<_TrendChart> createState() => _TrendChartState();
+}
+
+class _TrendChartState extends State<_TrendChart> {
+  int _selected = 0; // 0=HR, 1=SpO2, 2=Steps, 3=Temp
+
+  static const _tabs = ['Heart Rate', 'SpO₂', 'Steps', 'Temp'];
+  static const _units = ['bpm', '%', 'steps', '°C'];
+  static const _colors = [Color(0xFFDC2626), Color(0xFF3B5BDB), Color(0xFF059669), Color(0xFFF59E0B)];
+
+  List<double?> get _values => widget.metrics.map((m) {
+    return switch (_selected) {
+      0 => m.heartRate,
+      1 => m.spO2,
+      2 => m.steps,
+      3 => m.temperature,
+      _ => null,
+    };
+  }).toList();
+
+  @override
+  Widget build(BuildContext context) {
+    final vals = _values;
+    final nonNull = vals.whereType<double>().toList();
+    if (nonNull.isEmpty) {
+      return Container(
+        height: 160,
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: AppShadows.soft),
+        child: Center(child: Text('No data yet', style: GoogleFonts.plusJakartaSans(color: AppColors.textMuted))),
+      );
+    }
+
+    final minY = (nonNull.reduce((a, b) => a < b ? a : b) * 0.95).floorToDouble();
+    final maxY = (nonNull.reduce((a, b) => a > b ? a : b) * 1.05).ceilToDouble();
+    final color = _colors[_selected];
+
+    final spots = <FlSpot>[];
+    for (int i = 0; i < vals.length; i++) {
+      if (vals[i] != null) spots.add(FlSpot(i.toDouble(), vals[i]!));
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      decoration: BoxDecoration(
+        color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: AppShadows.soft,
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Tab pills
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: List.generate(_tabs.length, (i) {
+            final active = _selected == i;
+            return GestureDetector(
+              onTap: () => setState(() => _selected = i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: active ? _colors[i].withValues(alpha: 0.12) : AppColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: active ? _colors[i] : Colors.transparent),
+                ),
+                child: Text(_tabs[i], style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12, fontWeight: FontWeight.w700,
+                  color: active ? _colors[i] : AppColors.textMuted,
+                )),
+              ),
+            );
+          })),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 140,
+          child: LineChart(LineChartData(
+            minY: minY,
+            maxY: maxY,
+            gridData: FlGridData(
+              show: true,
+              drawVerticalLine: false,
+              getDrawingHorizontalLine: (_) => FlLine(color: const Color(0xFFF3F4F6), strokeWidth: 1),
+            ),
+            borderData: FlBorderData(show: false),
+            titlesData: FlTitlesData(
+              leftTitles: AxisTitles(sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 36,
+                getTitlesWidget: (v, _) => Text(
+                  v.toStringAsFixed(_selected == 2 ? 0 : 1),
+                  style: GoogleFonts.plusJakartaSans(fontSize: 9, color: AppColors.textMuted),
+                ),
+              )),
+              bottomTitles: AxisTitles(sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (v, _) {
+                  final i = v.toInt();
+                  if (i < 0 || i >= widget.metrics.length) return const SizedBox.shrink();
+                  return Text(
+                    DateFormat('d/M').format(widget.metrics[i].timestamp),
+                    style: GoogleFonts.plusJakartaSans(fontSize: 9, color: AppColors.textMuted),
+                  );
+                },
+              )),
+              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            ),
+            lineTouchData: LineTouchData(
+              touchTooltipData: LineTouchTooltipData(
+                getTooltipItems: (spots) => spots.map((s) => LineTooltipItem(
+                  '${s.y.toStringAsFixed(_selected == 2 ? 0 : 1)} ${_units[_selected]}',
+                  GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                )).toList(),
+              ),
+            ),
+            lineBarsData: [LineChartBarData(
+              spots: spots,
+              isCurved: true,
+              color: color,
+              barWidth: 2.5,
+              dotData: FlDotData(
+                getDotPainter: (_, __, _, _) => FlDotCirclePainter(
+                  radius: 3, color: color, strokeWidth: 1.5, strokeColor: Colors.white,
+                ),
+              ),
+              belowBarData: BarAreaData(
+                show: true,
+                gradient: LinearGradient(
+                  colors: [color.withValues(alpha: 0.18), color.withValues(alpha: 0.0)],
+                  begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                ),
+              ),
+            )],
+          )),
+        ),
+        const SizedBox(height: 4),
+        Text('${nonNull.length} reading${nonNull.length == 1 ? '' : 's'} · ${_units[_selected]}',
+          style: GoogleFonts.plusJakartaSans(fontSize: 10, color: AppColors.textMuted)),
+      ]),
+    );
+  }
 }

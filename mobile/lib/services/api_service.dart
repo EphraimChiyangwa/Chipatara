@@ -5,6 +5,21 @@ import '../config/constants.dart';
 import '../models/models.dart';
 
 class ApiService {
+  // Called when any request receives a 401 — wired to AuthProvider.logout()
+  static Function()? onUnauthorized;
+
+  // ── Cache helpers ─────────────────────────────────────────────────────────
+  static Future<void> _saveCache(String key, dynamic data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('cache_$key', jsonEncode(data));
+  }
+
+  static Future<dynamic> _loadCache(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('cache_$key');
+    return raw != null ? jsonDecode(raw) : null;
+  }
+
   static Future<String?> _token() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
@@ -19,12 +34,20 @@ class ApiService {
     return h;
   }
 
+  static void _check401(int statusCode) {
+    if (statusCode == 401) {
+      onUnauthorized?.call();
+      throw Exception('Session expired. Please log in again.');
+    }
+  }
+
   static Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body, {bool auth = false}) async {
     final res = await http.post(
       Uri.parse('$kBaseUrl$path'),
       headers: await _headers(auth: auth),
       body: jsonEncode(body),
     );
+    _check401(res.statusCode);
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) throw Exception(data['message'] ?? 'Request failed');
     return data;
@@ -32,6 +55,7 @@ class ApiService {
 
   static Future<dynamic> _get(String path) async {
     final res = await http.get(Uri.parse('$kBaseUrl$path'), headers: await _headers());
+    _check401(res.statusCode);
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) throw Exception(data['message'] ?? 'Request failed');
     return data;
@@ -43,6 +67,7 @@ class ApiService {
       headers: await _headers(),
       body: jsonEncode(body),
     );
+    _check401(res.statusCode);
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) throw Exception(data['message'] ?? 'Request failed');
     return data;
@@ -50,6 +75,7 @@ class ApiService {
 
   static Future<dynamic> _delete(String path) async {
     final res = await http.delete(Uri.parse('$kBaseUrl$path'), headers: await _headers());
+    _check401(res.statusCode);
     if (res.statusCode >= 400) {
       final data = jsonDecode(res.body);
       throw Exception(data['message'] ?? 'Request failed');
@@ -78,12 +104,44 @@ class ApiService {
       _post('/auth/forgot-password', {'email': email});
 
   // ── Doctors ───────────────────────────────────────────────────
-  static Future<List<Doctor>> getDoctors({String search = '', String specialization = ''}) async {
+  static Future<List<Doctor>> getDoctors({
+    String search = '',
+    String specialization = '',
+    double? minFee,
+    double? maxFee,
+    double? minRating,
+  }) async {
     var url = '/doctors?';
     if (search.isNotEmpty) url += 'search=${Uri.encodeComponent(search)}&';
-    if (specialization.isNotEmpty) url += 'specialization=${Uri.encodeComponent(specialization)}';
-    final data = await _get(url) as List;
-    return data.map((d) => Doctor.fromJson(d)).toList();
+    if (specialization.isNotEmpty) url += 'specialization=${Uri.encodeComponent(specialization)}&';
+    if (minFee != null && minFee > 0) url += 'minFee=${minFee.toInt()}&';
+    if (maxFee != null) url += 'maxFee=${maxFee.toInt()}&';
+    if (minRating != null && minRating > 0) url += 'minRating=$minRating&';
+    final isFiltered = search.isNotEmpty || specialization.isNotEmpty ||
+        (minFee != null && minFee > 0) || maxFee != null || (minRating != null && minRating > 0);
+    try {
+      final data = await _get(url) as List;
+      if (!isFiltered) await _saveCache('doctors', data);
+      return data.map((d) => Doctor.fromJson(d)).toList();
+    } catch (_) {
+      if (!isFiltered) {
+        final cached = await _loadCache('doctors') as List?;
+        if (cached != null) return cached.map((d) => Doctor.fromJson(d)).toList();
+      }
+      rethrow;
+    }
+  }
+
+  static Future<Doctor?> getDoctorByUserId(String userId) async {
+    try {
+      final data = await _get('/doctors/user/$userId') as Map<String, dynamic>;
+      return Doctor.fromJson(data);
+    } catch (_) { return null; }
+  }
+
+  static Future<List<Appointment>> getPatientHistoryWithDoctor(String patientId) async {
+    final data = await _get('/appointments/history/$patientId') as List;
+    return data.map((a) => Appointment.fromJson(a)).toList();
   }
 
   static Future<List<Map<String, dynamic>>> getDoctorReviews(String doctorId) async {
@@ -115,8 +173,15 @@ class ApiService {
   }
 
   static Future<List<Appointment>> getPatientAppointments() async {
-    final data = await _get('/appointments/patient') as List;
-    return data.map((a) => Appointment.fromJson(a)).toList();
+    try {
+      final data = await _get('/appointments/patient') as List;
+      await _saveCache('patient_appointments', data);
+      return data.map((a) => Appointment.fromJson(a)).toList();
+    } catch (_) {
+      final cached = await _loadCache('patient_appointments') as List?;
+      if (cached != null) return cached.map((a) => Appointment.fromJson(a)).toList();
+      rethrow;
+    }
   }
 
   static Future<List<Appointment>> getDoctorAppointments() async {
@@ -225,6 +290,40 @@ class ApiService {
     required String reason,
   }) => _post('/payments/verify', {'reference': reference, 'doctorId': doctorId, 'date': date, 'reason': reason}, auth: true);
 
+  // ── Documents ─────────────────────────────────────────────────────────────
+  static Future<List<Map<String, dynamic>>> getMyDocuments() async {
+    final data = await _get('/documents') as List;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  static Future<Map<String, dynamic>> uploadDocument({
+    required String name,
+    required String docType,
+    required String mimeType,
+    required int sizeKb,
+    required String base64Data,
+  }) => _post('/documents', {
+    'name': name,
+    'docType': docType,
+    'mimeType': mimeType,
+    'sizeKb': sizeKb,
+    'data': base64Data,
+  }, auth: true);
+
+  static Future<Map<String, dynamic>> downloadDocument(String id) async {
+    final data = await _get('/documents/$id/download');
+    return data as Map<String, dynamic>;
+  }
+
+  static Future<void> deleteDocument(String id) => _delete('/documents/$id');
+
+  static Future<List<Map<String, dynamic>>> getPatientDocuments(String patientId) async {
+    final data = await _get('/documents/patient/$patientId') as List;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  static Future<void> toggleDoctorOnline() => _put('/doctors/toggle-online', {});
+
   static Future<void> registerFcmToken(String token) =>
       _post('/devices/fcm-token', {'token': token}, auth: true);
 
@@ -242,5 +341,26 @@ class ApiService {
   static Future<List<Prescription>> getMyPrescriptions() async {
     final data = await _get('/prescriptions/my') as List;
     return data.map((p) => Prescription.fromJson(p as Map<String, dynamic>)).toList();
+  }
+
+  static Future<List<Map<String, dynamic>>> getPaymentHistory() async {
+    final data = await _get('/payments/history') as List;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  // ── Health journal ────────────────────────────────────────────
+  static Future<List<Map<String, dynamic>>> getMyJournal() async {
+    final data = await _get('/journal') as List;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  static Future<Map<String, dynamic>> addJournalEntry(String entry, List<String> tags) =>
+      _post('/journal', {'entry': entry, 'tags': tags}, auth: true);
+
+  static Future<void> deleteJournalEntry(String id) => _delete('/journal/$id');
+
+  static Future<List<Map<String, dynamic>>> getPatientJournal(String patientId) async {
+    final data = await _get('/journal/patient/$patientId') as List;
+    return data.cast<Map<String, dynamic>>();
   }
 }

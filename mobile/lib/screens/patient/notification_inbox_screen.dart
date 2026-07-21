@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../config/constants.dart';
+import '../../providers/badge_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
 import '../chat_screen.dart';
@@ -19,7 +21,13 @@ class _NotificationInboxScreenState extends State<NotificationInboxScreen> {
   bool _loading = true;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<BadgeProvider>().clearNotifBadge();
+    });
+  }
 
   Future<void> _load() async {
     setState(() => _loading = true);

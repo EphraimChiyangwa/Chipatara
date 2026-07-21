@@ -2,7 +2,10 @@ import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../providers/badge_provider.dart';
 import '../screens/chat_screen.dart';
 import '../screens/patient/appointment_detail_screen.dart';
 import 'api_service.dart';
@@ -47,24 +50,12 @@ class NotificationService {
 
     FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
 
-    // Foreground: show local notification (preserving tap data as payload)
+    // Foreground: show in-app banner + update badge
     FirebaseMessaging.onMessage.listen((msg) {
       final n = msg.notification;
       if (n == null) return;
       _saveToInbox(n.title ?? '', n.body ?? '', msg.data);
-      _local.show(
-        n.hashCode,
-        n.title,
-        n.body,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            _channelId, _channelName,
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
-        ),
-        payload: jsonEncode(msg.data),
-      );
+      _showInAppBanner(n.title ?? '', n.body ?? '', msg.data);
     });
 
     // Background: notification tapped, app was running
@@ -120,6 +111,49 @@ class NotificationService {
   static Future<void> clearInbox() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_inboxKey);
+  }
+
+  static void _showInAppBanner(String title, String body, Map<String, dynamic> data) {
+    final context = _navigatorKey?.currentContext;
+    if (context == null || !context.mounted) return;
+    // Update badge
+    try { context.read<BadgeProvider>().setNotifUnread(); } catch (_) {}
+    // Show styled SnackBar
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      backgroundColor: const Color(0xFF1E3A5F),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      duration: const Duration(seconds: 5),
+      content: Row(children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.notifications_rounded, color: Colors.white, size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title, style: GoogleFonts.plusJakartaSans(
+              color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13,
+            )),
+            Text(body, style: GoogleFonts.plusJakartaSans(
+              color: Colors.white70, fontSize: 12,
+            ), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ],
+        )),
+      ]),
+      action: SnackBarAction(
+        label: 'View',
+        textColor: const Color(0xFF93C5FD),
+        onPressed: () => _navigate(data['type'] as String?, data['appointmentId'] as String?),
+      ),
+    ));
   }
 
   static Future<void> _navigate(String? type, String? appointmentId) async {

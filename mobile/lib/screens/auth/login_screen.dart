@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/widgets.dart';
@@ -16,15 +18,72 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _email = TextEditingController();
+  final _email    = TextEditingController();
   final _password = TextEditingController();
-  bool _loading = false;
+  final _localAuth = LocalAuthentication();
+
+  bool _loading      = false;
+  bool _bioAvailable = false;
+  bool _bioEnabled   = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    try {
+      final canCheck  = await _localAuth.canCheckBiometrics;
+      final supported = await _localAuth.isDeviceSupported();
+      final prefs     = await SharedPreferences.getInstance();
+      final enabled   = prefs.getBool('biometric_enabled') ?? false;
+      final hasEmail  = (prefs.getString('saved_email') ?? '').isNotEmpty;
+      if (mounted) {
+        setState(() {
+          _bioAvailable = canCheck && supported;
+          _bioEnabled   = enabled && hasEmail;
+        });
+        // Auto-trigger biometric on first open if enabled
+        if (_bioEnabled) _loginWithBiometric();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loginWithBiometric() async {
+    try {
+      final authenticated = await _localAuth.authenticate(
+        localizedReason: 'Verify your identity to sign in',
+        options: const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
+      );
+      if (!authenticated || !mounted) return;
+
+      final prefs    = await SharedPreferences.getInstance();
+      final email    = prefs.getString('saved_email') ?? '';
+      final password = prefs.getString('saved_password') ?? '';
+      if (email.isEmpty || password.isEmpty) return;
+
+      if (!mounted) return;
+      setState(() { _loading = true; _error = null; });
+      await context.read<AuthProvider>().login(email, password);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Biometric login failed. Use your password.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   Future<void> _login() async {
     setState(() { _loading = true; _error = null; });
     try {
       await context.read<AuthProvider>().login(_email.text.trim(), _password.text);
+      // Refresh saved credentials only if user has already opted into biometrics
+      if (_bioEnabled) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('saved_email', _email.text.trim());
+        await prefs.setString('saved_password', _password.text);
+      }
     } catch (e) {
       setState(() => _error = e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -100,6 +159,30 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
               const SizedBox(height: 20),
               AppButton(label: 'Sign In', onTap: _login, loading: _loading),
+
+              // Biometric button — only shown when user has opted in
+              if (_bioAvailable && _bioEnabled) ...[
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: _loginWithBiometric,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      const Icon(Icons.fingerprint_rounded, color: AppColors.primary, size: 22),
+                      const SizedBox(width: 8),
+                      Text('Sign in with Biometrics', style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary,
+                      )),
+                    ]),
+                  ),
+                ),
+              ],
             ]),
           ),
           const SizedBox(height: 20),

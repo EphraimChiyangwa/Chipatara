@@ -7,12 +7,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'config/constants.dart';
 import 'providers/auth_provider.dart';
+import 'providers/badge_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/patient/patient_shell.dart';
 import 'screens/doctor/doctor_shell.dart';
 import 'services/notification_service.dart';
+import 'services/background_sync_service.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -30,11 +32,15 @@ void main() async {
   try {
     await Firebase.initializeApp();
     await NotificationService.init(navigatorKey);
+    await BackgroundSyncService.init();
   } catch (_) {}
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => BadgeProvider()),
+      ],
       child: const ChipataraApp(),
     ),
   );
