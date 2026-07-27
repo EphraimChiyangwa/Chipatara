@@ -200,55 +200,57 @@ class _AddEntrySheetState extends State<_AddEntrySheet> {
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Text('How are you feeling?', style: GoogleFonts.plusJakartaSans(
-            fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary,
+      child: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text('How are you feeling?', style: GoogleFonts.plusJakartaSans(
+              fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textPrimary,
+            )),
+            const Spacer(),
+            IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+          ]),
+          const SizedBox(height: 4),
+          Text(DateFormat('EEEE, MMMM d').format(DateTime.now()),
+            style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.textMuted)),
+          const SizedBox(height: 16),
+          AppInput(
+            label: 'Journal entry',
+            hint: 'Describe your symptoms, mood, or anything notable…',
+            controller: _ctrl,
+            maxLines: 4,
+          ),
+          const SizedBox(height: 16),
+          Text('Symptoms (optional)', style: GoogleFonts.plusJakartaSans(
+            fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary,
           )),
-          const Spacer(),
-          IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
-        ]),
-        const SizedBox(height: 4),
-        Text(DateFormat('EEEE, MMMM d').format(DateTime.now()),
-          style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.textMuted)),
-        const SizedBox(height: 16),
-        AppInput(
-          label: 'Journal entry',
-          hint: 'Describe your symptoms, mood, or anything notable…',
-          controller: _ctrl,
-          maxLines: 4,
-        ),
-        const SizedBox(height: 16),
-        Text('Symptoms (optional)', style: GoogleFonts.plusJakartaSans(
-          fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary,
-        )),
-        const SizedBox(height: 8),
-        Wrap(spacing: 8, runSpacing: 8, children: _kTags.map((tag) {
-          final sel = _selected.contains(tag);
-          return GestureDetector(
-            onTap: () => setState(() => sel ? _selected.remove(tag) : _selected.add(tag)),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: sel ? AppColors.primary : AppColors.surface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: sel ? AppColors.primary : const Color(0xFFE5E7EB)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: _kTags.map((tag) {
+            final sel = _selected.contains(tag);
+            return GestureDetector(
+              onTap: () => setState(() => sel ? _selected.remove(tag) : _selected.add(tag)),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: sel ? AppColors.primary : AppColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: sel ? AppColors.primary : const Color(0xFFE5E7EB)),
+                ),
+                child: Text(tag, style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12, fontWeight: FontWeight.w600,
+                  color: sel ? Colors.white : AppColors.textSecondary,
+                )),
               ),
-              child: Text(tag, style: GoogleFonts.plusJakartaSans(
-                fontSize: 12, fontWeight: FontWeight.w600,
-                color: sel ? Colors.white : AppColors.textSecondary,
-              )),
-            ),
-          );
-        }).toList()),
-        if (_error != null) ...[
-          const SizedBox(height: 12),
-          Text(_error!, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.danger)),
-        ],
-        const SizedBox(height: 20),
-        AppButton(label: 'Save Entry', onTap: _save, loading: _loading, icon: Icons.check_rounded),
-      ]),
+            );
+          }).toList()),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.danger)),
+          ],
+          const SizedBox(height: 20),
+          AppButton(label: 'Save Entry', onTap: _save, loading: _loading, icon: Icons.check_rounded),
+        ]),
+      ),
     );
   }
 }

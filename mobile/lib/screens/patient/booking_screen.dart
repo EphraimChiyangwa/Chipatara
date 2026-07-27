@@ -44,6 +44,18 @@ class _BookingScreenState extends State<BookingScreen> {
 
   Future<void> _book() async {
     if (_reason.text.trim().isEmpty || _selectedSlot == null) return;
+
+    // Merge selected date with slot start time (e.g. "09:00")
+    final timeParts = _selectedSlot!.startTime.split(':');
+    final appointmentDateTime = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      int.parse(timeParts[0]),
+      int.parse(timeParts[1]),
+    );
+    final dateStr = appointmentDateTime.toIso8601String();
+
     final fee = widget.doctor.profile?.consultationFee ?? 0;
     setState(() => _loading = true);
     try {
@@ -51,7 +63,7 @@ class _BookingScreenState extends State<BookingScreen> {
         // Paid appointment — go through Paystack
         final res = await ApiService.initializePayment(
           doctorId: widget.doctor.id,
-          date: _selectedDate.toIso8601String(),
+          date: dateStr,
           reason: _reason.text.trim(),
         );
         if (!mounted) return;
@@ -60,7 +72,7 @@ class _BookingScreenState extends State<BookingScreen> {
             authorizationUrl: res['authorization_url'] as String,
             reference: res['reference'] as String,
             doctorId: widget.doctor.id,
-            date: _selectedDate.toIso8601String(),
+            date: dateStr,
             reason: _reason.text.trim(),
             doctorName: widget.doctor.name,
             fee: (res['fee'] as num).toDouble(),
@@ -70,7 +82,7 @@ class _BookingScreenState extends State<BookingScreen> {
         // Free appointment — direct booking
         await ApiService.bookAppointment(
           doctorId: widget.doctor.id,
-          date: _selectedDate.toIso8601String(),
+          date: dateStr,
           reason: _reason.text.trim(),
           slotId: _selectedSlot!.id,
         );

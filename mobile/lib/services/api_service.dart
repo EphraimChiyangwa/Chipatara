@@ -8,6 +8,10 @@ class ApiService {
   // Called when any request receives a 401 — wired to AuthProvider.logout()
   static Function()? onUnauthorized;
 
+  // In-memory token — set immediately on login/restore so API calls don't
+  // have to wait for SharedPreferences before the first authenticated request.
+  static String? authToken;
+
   // ── Cache helpers ─────────────────────────────────────────────────────────
   static Future<void> _saveCache(String key, dynamic data) async {
     final prefs = await SharedPreferences.getInstance();
@@ -21,6 +25,7 @@ class ApiService {
   }
 
   static Future<String?> _token() async {
+    if (authToken != null) return authToken;
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
   }
@@ -41,12 +46,19 @@ class ApiService {
     }
   }
 
+  static const _kTimeout = Duration(seconds: 10);
+
   static Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body, {bool auth = false}) async {
-    final res = await http.post(
-      Uri.parse('$kBaseUrl$path'),
-      headers: await _headers(auth: auth),
-      body: jsonEncode(body),
-    );
+    final http.Response res;
+    try {
+      res = await http.post(
+        Uri.parse('$kBaseUrl$path'),
+        headers: await _headers(auth: auth),
+        body: jsonEncode(body),
+      ).timeout(_kTimeout);
+    } on Exception {
+      throw Exception('Cannot reach server. Check your connection and try again.');
+    }
     _check401(res.statusCode);
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) throw Exception(data['message'] ?? 'Request failed');
@@ -54,7 +66,13 @@ class ApiService {
   }
 
   static Future<dynamic> _get(String path) async {
-    final res = await http.get(Uri.parse('$kBaseUrl$path'), headers: await _headers());
+    final http.Response res;
+    try {
+      res = await http.get(Uri.parse('$kBaseUrl$path'), headers: await _headers())
+          .timeout(_kTimeout);
+    } on Exception {
+      throw Exception('Cannot reach server. Check your connection and try again.');
+    }
     _check401(res.statusCode);
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) throw Exception(data['message'] ?? 'Request failed');
@@ -62,11 +80,16 @@ class ApiService {
   }
 
   static Future<dynamic> _put(String path, Map<String, dynamic> body) async {
-    final res = await http.put(
-      Uri.parse('$kBaseUrl$path'),
-      headers: await _headers(),
-      body: jsonEncode(body),
-    );
+    final http.Response res;
+    try {
+      res = await http.put(
+        Uri.parse('$kBaseUrl$path'),
+        headers: await _headers(),
+        body: jsonEncode(body),
+      ).timeout(_kTimeout);
+    } on Exception {
+      throw Exception('Cannot reach server. Check your connection and try again.');
+    }
     _check401(res.statusCode);
     final data = jsonDecode(res.body);
     if (res.statusCode >= 400) throw Exception(data['message'] ?? 'Request failed');
@@ -74,7 +97,8 @@ class ApiService {
   }
 
   static Future<dynamic> _delete(String path) async {
-    final res = await http.delete(Uri.parse('$kBaseUrl$path'), headers: await _headers());
+    final res = await http.delete(Uri.parse('$kBaseUrl$path'), headers: await _headers())
+        .timeout(_kTimeout, onTimeout: () => throw Exception('Cannot reach server. Check your connection and try again.'));
     _check401(res.statusCode);
     if (res.statusCode >= 400) {
       final data = jsonDecode(res.body);

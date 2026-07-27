@@ -36,6 +36,7 @@ class AuthProvider extends ChangeNotifier {
     final avatar = prefs.getString('userAvatar');
     if (_token != null && id != null) {
       _user = User(id: id, name: name ?? '', email: email ?? '', role: role ?? 'patient', avatar: avatar);
+      ApiService.authToken = _token;
     }
     _loading = false;
     notifyListeners();
@@ -54,22 +55,23 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _saveSession(Map<String, dynamic> res) async {
     _token = res['token'];
     _user = User.fromJson(res['user']);
+    ApiService.authToken = _token; // available immediately — no SharedPreferences wait
+    notifyListeners(); // navigate now
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('token', _token!);
-    await _persistUser(prefs, _user!);
-    notifyListeners();
+    await _persistUser(prefs, _user!); // persist in background
   }
 
   Future<void> _persistUser(SharedPreferences prefs, User u) async {
-    await prefs.setString('userId', u.id);
-    await prefs.setString('userName', u.name);
-    await prefs.setString('userEmail', u.email);
-    await prefs.setString('userRole', u.role);
-    if (u.avatar != null) {
-      await prefs.setString('userAvatar', u.avatar!);
-    } else {
-      await prefs.remove('userAvatar');
-    }
+    await Future.wait([
+      prefs.setString('token', _token!),
+      prefs.setString('userId', u.id),
+      prefs.setString('userName', u.name),
+      prefs.setString('userEmail', u.email),
+      prefs.setString('userRole', u.role),
+      u.avatar != null
+          ? prefs.setString('userAvatar', u.avatar!)
+          : prefs.remove('userAvatar'),
+    ]);
   }
 
   Future<void> updateName(String name) async {
@@ -93,8 +95,17 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     _user = null;
     _token = null;
+    ApiService.authToken = null;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await Future.wait([
+      prefs.remove('token'),
+      prefs.remove('userId'),
+      prefs.remove('userName'),
+      prefs.remove('userEmail'),
+      prefs.remove('userRole'),
+      prefs.remove('userAvatar'),
+      prefs.setBool('onboarding_complete', true),
+    ]);
     notifyListeners();
   }
 }

@@ -11,6 +11,7 @@ import 'providers/badge_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/splash_screen.dart';
 import 'screens/patient/patient_shell.dart';
 import 'screens/doctor/doctor_shell.dart';
 import 'services/notification_service.dart';
@@ -100,27 +101,33 @@ class _Root extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
-        if (auth.isLoading) {
-          return const Scaffold(
-            backgroundColor: AppColors.surface,
-            body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        if (auth.isLoading) return const SplashScreen();
+
+        final Widget screen;
+        if (auth.isLoggedIn) {
+          screen = KeyedSubtree(
+            key: const ValueKey('home'),
+            child: auth.user?.role == 'doctor' ? const DoctorShell() : const PatientShell(),
+          );
+        } else {
+          screen = KeyedSubtree(
+            key: const ValueKey('auth'),
+            child: FutureBuilder<SharedPreferences>(
+              future: _prefsF,
+              builder: (_, snap) {
+                if (!snap.hasData) return const SplashScreen();
+                final done = snap.data!.getBool('onboarding_complete') ?? false;
+                return done ? const LoginScreen() : const OnboardingScreen();
+              },
+            ),
           );
         }
-        if (auth.isLoggedIn) {
-          return auth.user?.role == 'doctor' ? const DoctorShell() : const PatientShell();
-        }
-        return FutureBuilder<SharedPreferences>(
-          future: _prefsF,
-          builder: (_, snap) {
-            if (!snap.hasData) {
-              return const Scaffold(
-                backgroundColor: AppColors.surface,
-                body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
-              );
-            }
-            final done = snap.data!.getBool('onboarding_complete') ?? false;
-            return done ? const LoginScreen() : const OnboardingScreen();
-          },
+
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          transitionBuilder: (child, animation) =>
+              FadeTransition(opacity: animation, child: child),
+          child: screen,
         );
       },
     );
